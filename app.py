@@ -5,13 +5,33 @@ import streamlit as st
 import time
 import firebase_admin
 from firebase_admin import credentials, firestore
+from collections.abc import Mapping
 
 # 1. FIREBASE BAĞLANTISI (Yalnızca bir kez başlatılır)
+db = None
 if not firebase_admin._apps:
     try:
         cred = None
         if "firebase" in st.secrets:
-            cred = credentials.Certificate(st.secrets["firebase"])
+            firebase_secret = st.secrets["firebase"]
+            if isinstance(firebase_secret, str):
+                try:
+                    firebase_secret = json.loads(firebase_secret)
+                except json.JSONDecodeError:
+                    try:
+                        import ast
+                        firebase_secret = ast.literal_eval(firebase_secret)
+                    except Exception:
+                        raise ValueError(
+                            "st.secrets['firebase'] JSON veya dict formatında değil."
+                        )
+            if isinstance(firebase_secret, Mapping):
+                firebase_secret = dict(firebase_secret)
+                cred = credentials.Certificate(firebase_secret)
+            else:
+                raise ValueError(
+                    "st.secrets['firebase'] geçerli bir dict ya da JSON string içermiyor."
+                )
         elif os.environ.get("FIREBASE_CREDENTIALS"):
             cred = credentials.Certificate(json.loads(os.environ["FIREBASE_CREDENTIALS"]))
         elif os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
@@ -30,7 +50,16 @@ if not firebase_admin._apps:
     except Exception as e:
         st.error(f"Firebase anahtar dosyası bulunamadı veya hatalı: {e}")
 
-db = firestore.client()
+if firebase_admin._apps:
+    db = firestore.client()
+else:
+    db = None
+
+if db is None:
+    st.error(
+        "Firebase bağlantısı kurulamadı. Lütfen kimlik bilgilerini kontrol edin ve deploy ortamınızda doğru Firebase anahtarını sağlayın."
+    )
+    st.stop()
 
 # 2. YARDIMCI FONKSİYONLAR
 def en_boy_harflendir(en_sayisi):
