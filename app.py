@@ -101,6 +101,39 @@ def safe_rerun():
             except Exception:
                 pass
 
+
+def get_admin_code():
+    """Yönetici kodunu Firestore'dan ya da gizli ayarlardan oku."""
+    try:
+        admin_doc = db.collection("config").document("admin").get()
+        if admin_doc.exists:
+            admin_data = admin_doc.to_dict() or {}
+            admin_code = admin_data.get("admin_code")
+            if admin_code:
+                return admin_code
+    except Exception:
+        pass
+
+    if "admin_code" in st.secrets:
+        return st.secrets["admin_code"]
+
+    return os.environ.get("ADMIN_CODE")
+
+
+def get_default_user_credentials():
+    """Varsa gizli ayarlardan veya env'den varsayılan kullanıcı kimlik bilgilerini al."""
+    if "default_user" in st.secrets:
+        default_user = st.secrets["default_user"]
+        if isinstance(default_user, Mapping):
+            return default_user.get("username"), default_user.get("password")
+
+    username = os.environ.get("DEFAULT_USER_NAME")
+    password = os.environ.get("DEFAULT_USER_PASS")
+    if username and password:
+        return username, password
+
+    return None, None
+
 # 3. STREAMLIT WEB ARAYÜZÜ AYARLARI
 st.set_page_config(page_title="Tarla Takip Sistemi", layout="wide")
 
@@ -111,7 +144,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Basit kullanıcı doğrulama - örnek kullanıcı: ömer / 4321
+# Basit kullanıcı doğrulama
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "username" not in st.session_state:
@@ -143,8 +176,8 @@ if not st.session_state.authenticated:
                     else:
                         st.error("Hatalı kullanıcı adı veya şifre. Lütfen tekrar deneyin.")
                 else:
-                    # Fallback olarak sabit 'ömer' hesabını koru
-                    if login_username == "ömer" and login_password == "4321":
+                    default_username, default_password = get_default_user_credentials()
+                    if default_username and default_password and login_username == default_username and login_password == default_password:
                         st.session_state.authenticated = True
                         st.session_state.username = login_username
                         st.session_state.secili_tarla = None
@@ -159,12 +192,17 @@ if not st.session_state.authenticated:
         st.info("Tarla verileri kullanıcı bazında saklanır; başka bir kullanıcı kendi tarla listesini görür.")
 
         with st.expander("Yeni Kullanıcı Oluştur (Yetkili)"):
-            st.write("Sadece özel kodu bilenler yeni kullanıcı oluşturabilir.")
+            
             new_admin_code = st.text_input("Özel Kod:", type="password", key="expander_admin_code")
             new_user_name = st.text_input("Yeni Kullanıcı Adı:", key="expander_new_user")
             new_user_pass = st.text_input("Yeni Şifre:", type="password", key="expander_new_pass")
             if st.button("Kullanıcı Oluştur", key="expander_create_user"):
-                if new_admin_code == "******":
+                admin_code = get_admin_code()
+                if not admin_code:
+                    st.error(
+                        "Yönetici kodu yapılandırılmamış. Lütfen Firestore'da config/admin belgesine admin_code ekleyin veya env/st.secrets içinde admin_code tanımlayın."
+                    )
+                elif new_admin_code == admin_code:
                     if new_user_name and new_user_pass:
                         user_ref = db.collection("users").document(new_user_name)
                         try:
