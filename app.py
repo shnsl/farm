@@ -164,7 +164,7 @@ if not st.session_state.authenticated:
             new_user_name = st.text_input("Yeni Kullanıcı Adı:", key="expander_new_user")
             new_user_pass = st.text_input("Yeni Şifre:", type="password", key="expander_new_pass")
             if st.button("Kullanıcı Oluştur", key="expander_create_user"):
-                if new_admin_code == "TARLAM":
+                if new_admin_code == "******":
                     if new_user_name and new_user_pass:
                         user_ref = db.collection("users").document(new_user_name)
                         try:
