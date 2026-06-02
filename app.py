@@ -140,7 +140,7 @@ st.set_page_config(page_title="Tarla Takip Sistemi", layout="wide")
 
 
 st.markdown(
-    "<h1 style='text-align:center; margin-bottom: 0.25em;'>🚜 Çoklu Tarla ve Ağaç Bakım Yönetimi</h1>",
+    "<h1 style='text-align:left; margin-bottom: 0.25em;'>🚜 Çoklu Tarla ve Ağaç Bakım Yönetimi 🚜</h1>",
     unsafe_allow_html=True,
 )
 
