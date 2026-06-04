@@ -140,7 +140,7 @@ st.set_page_config(page_title="Tarla Takip Sistemi", layout="wide")
 
 
 st.markdown(
-    "<h1 style='text-align:center; margin-bottom: 0.25em;'>🚜 Çoklu Tarla Ağaç Bakım Yönetimi 🚜</h1>",
+    "<h1 style='text-align:center; margin-bottom: 0.25em;'>🚜 Çoklu Tarla ve Ağaç Bakım Yönetimi</h1>",
     unsafe_allow_html=True,
 )
 
@@ -160,35 +160,40 @@ if not st.session_state.authenticated:
             login_submit = st.form_submit_button("Giriş Yap")
 
         if login_submit:
-            # Öncelikle Firestore 'users' koleksiyonunu kontrol et
-            try:
-                user_doc = db.collection("users").document(login_username).get()
-                if user_doc.exists:
-                    user_data = user_doc.to_dict() or {}
-                    if user_data.get("password") == login_password:
-                        st.session_state.authenticated = True
-                        st.session_state.username = login_username
-                        st.session_state.secili_tarla = None
-                        st.session_state.secili_agac = None
-                        st.session_state.show_agac_modal = False
-                        st.success(f"{login_username} kullanıcı hesabıyla giriş yapıldı.")
-                        safe_rerun()
+            login_username = login_username.strip()
+            login_password = login_password.strip()
+            if not login_username or not login_password:
+                st.error("Lütfen kullanıcı adı ve şifre alanlarını boş bırakmadan girin.")
+            else:
+                # Öncelikle Firestore 'users' koleksiyonunu kontrol et
+                try:
+                    user_doc = db.collection("users").document(login_username).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict() or {}
+                        if user_data.get("password") == login_password:
+                            st.session_state.authenticated = True
+                            st.session_state.username = login_username
+                            st.session_state.secili_tarla = None
+                            st.session_state.secili_agac = None
+                            st.session_state.show_agac_modal = False
+                            st.success(f"{login_username} kullanıcı hesabıyla giriş yapıldı.")
+                            safe_rerun()
+                        else:
+                            st.error("Hatalı kullanıcı adı veya şifre. Lütfen tekrar deneyin.")
                     else:
-                        st.error("Hatalı kullanıcı adı veya şifre. Lütfen tekrar deneyin.")
-                else:
-                    default_username, default_password = get_default_user_credentials()
-                    if default_username and default_password and login_username == default_username and login_password == default_password:
-                        st.session_state.authenticated = True
-                        st.session_state.username = login_username
-                        st.session_state.secili_tarla = None
-                        st.session_state.secili_agac = None
-                        st.session_state.show_agac_modal = False
-                        st.success(f"{login_username} kullanıcı hesabıyla giriş yapıldı.")
-                        safe_rerun()
-                    else:
-                        st.error("Hatalı kullanıcı adı veya şifre. Lütfen tekrar deneyin.")
-            except Exception as e:
-                st.error(f"Kullanıcı doğrulanırken hata oluştu: {e}")
+                        default_username, default_password = get_default_user_credentials()
+                        if default_username and default_password and login_username == default_username and login_password == default_password:
+                            st.session_state.authenticated = True
+                            st.session_state.username = login_username
+                            st.session_state.secili_tarla = None
+                            st.session_state.secili_agac = None
+                            st.session_state.show_agac_modal = False
+                            st.success(f"{login_username} kullanıcı hesabıyla giriş yapıldı.")
+                            safe_rerun()
+                        else:
+                            st.error("Hatalı kullanıcı adı veya şifre. Lütfen tekrar deneyin.")
+                except Exception:
+                    st.error("Kullanıcı doğrulanırken hata oluştu. Lütfen bilgilerinizi kontrol edin ve tekrar deneyin.")
         st.info("Tarla verileri kullanıcı bazında saklanır; başka bir kullanıcı kendi tarla listesini görür.")
 
         with st.expander("Yeni Kullanıcı Oluştur (Yetkili)"):
@@ -276,6 +281,46 @@ st.markdown(
     .progress-bar-cell > div {
         margin: 0 !important;
     }
+
+    /* Mobile-specific adjustments */
+    @media (max-width: 800px) {
+        .stAppViewContainer > .main > .block-container {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            max-width: 100% !important;
+        }
+        .stForm { width: 100% !important; align-items: stretch !important; }
+        .stForm .stButton > button { min-width: 120px !important; }
+        .stButton>button { aspect-ratio: auto !important; min-height: 56px !important; font-size: 15px !important; padding: 8px 10px !important; }
+        .progress-bar-cell { margin-top: -6px !important; }
+        /* Hide sidebar on small screens to maximize content space */
+        section.stSidebar { display: none !important; }
+        /* Provide a visible floating toggle for sidebar */
+        .st-key-show_sidebar button {
+            position: fixed !important;
+            top: 12px !important;
+            right: 12px !important;
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 50% !important;
+            background: #111 !important;
+            color: #fff !important;
+            z-index: 9999 !important;
+            font-size: 28px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        /* Make column groups horizontally scrollable to avoid layout break when there are many columns */
+        .css-1lcbmhc > div[role='group'] { overflow-x: auto; }
+        .css-1lcbmhc > div[role='group'] > div { flex: 0 0 auto; }
+    }
+
+    @media (max-width: 420px) {
+        .stButton>button { min-height: 48px !important; font-size: 14px !important; }
+        .stAppViewContainer > .main > .block-container { padding-left: 8px !important; padding-right: 8px !important; }
+    }
+
     </style>""",
     unsafe_allow_html=True,
 )
