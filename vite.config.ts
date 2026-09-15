@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
         name: 'Tarla Ağaç Takip',
         short_name: 'Tarla',
