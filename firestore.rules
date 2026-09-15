@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isFarmOwner(farmId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/farms/$(farmId))
+        && get(/databases/$(database)/documents/farms/$(farmId)).data.ownerUid
+          == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwnUser(uid);
+      allow create: if isOwnUser(uid)
+        && request.resource.data.keys().hasAll(['email', 'farmId', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.farmId is string;
+      allow update: if isOwnUser(uid)
+        && request.resource.data.farmId == resource.data.farmId;
+      allow delete: if false;
+    }
+
+    match /farms/{farmId} {
+      allow read: if isFarmOwner(farmId);
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['name', 'ownerUid', 'createdAt']);
+      allow update: if isFarmOwner(farmId)
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isFarmOwner(farmId);
+
+      match /{document=**} {
+        allow read, write: if isFarmOwner(farmId);
+      }
+    }
+  }
+}
