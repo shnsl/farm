@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from 'react'
+import {
+  IconLeaf,
+  IconLock,
+  IconSettings,
+  IconShield,
+  PageTitle,
+  SectionTitle,
+} from '../components/Icons'
 import { careStandards } from '../config/careStandards'
-import { defaultPlowWindows, defaultTimesPerYear } from '../config/plowWindows'
 import { useAuth } from '../lib/auth'
 
 export function SettingsPage() {
@@ -18,7 +25,7 @@ export function SettingsPage() {
     setError(null)
 
     if (!/^\d{6}$/.test(currentPin) || !/^\d{6}$/.test(nextPin)) {
-      setError('Şifreler 6 haneli rakam olmalıdır')
+      setError('Şifreleri kontrol et')
       return
     }
     if (nextPin !== confirmPin) {
@@ -44,15 +51,19 @@ export function SettingsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <h1>Ayarlar</h1>
+          <PageTitle icon={<IconSettings />} tone="violet">
+            Ayarlar
+          </PageTitle>
           <p className="muted">PIN, config standartları ve güvenlik notları.</p>
         </div>
       </header>
 
       <section className="panel stack">
-        <h2>Şifre değiştir</h2>
+        <SectionTitle icon={<IconLock />} tone="amber">
+          Şifre değiştir
+        </SectionTitle>
         <p className="muted small">
-          6 haneli PIN Firebase Auth’ta tutulur. Değişiklik anında geçerli olur.
+          PIN Firebase Auth’ta tutulur. Değişiklik anında geçerli olur.
         </p>
         <form className="stack" onSubmit={onChangePin}>
           <label>
@@ -113,7 +124,9 @@ export function SettingsPage() {
       </section>
 
       <section className="panel stack">
-        <h2>Bakım standartları</h2>
+        <SectionTitle icon={<IconLeaf />} tone="green">
+          Bakım standartları
+        </SectionTitle>
         <p className="muted">
           Kaynak: <code>src/config/careStandards.ts</code>
         </p>
@@ -128,24 +141,11 @@ export function SettingsPage() {
       </section>
 
       <section className="panel stack">
-        <h2>Sürme standartları</h2>
-        <p className="muted">
-          Kaynak: <code>src/config/plowWindows.ts</code> · yılda{' '}
-          {defaultTimesPerYear} kez
-        </p>
-        <ul>
-          {defaultPlowWindows.map((w) => (
-            <li key={w.id}>
-              {w.label}: {w.startMonthDay} → {w.endMonthDay}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel stack">
-        <h2>Güvenlik</h2>
+        <SectionTitle icon={<IconShield />} tone="sky">
+          Güvenlik
+        </SectionTitle>
         <ul className="bullets">
-          <li>Giriş yalnızca 6 haneli PIN ile yapılır (e-posta sorulmaz).</li>
+          <li>Giriş yalnızca PIN ile yapılır (e-posta sorulmaz).</li>
           <li>
             PIN Firebase Authentication’da saklanır; Firestore’da yalnızca erişim
             meta verisi tutulur.

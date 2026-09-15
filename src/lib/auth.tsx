@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithPin = useCallback(async (pin: string) => {
     setError(null)
     if (!pinSchema.test(pin)) {
-      throw new Error('Şifre 6 haneli rakam olmalıdır')
+      throw new Error('Şifreyi kontrol et')
     }
 
     try {
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const changePin = useCallback(async (currentPin: string, nextPin: string) => {
     setError(null)
     if (!pinSchema.test(currentPin) || !pinSchema.test(nextPin)) {
-      throw new Error('Şifre 6 haneli rakam olmalıdır')
+      throw new Error('Şifreyi kontrol et')
     }
     if (currentPin === nextPin) {
       throw new Error('Yeni şifre eskisiyle aynı olamaz')

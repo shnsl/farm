@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
+  IconFields,
+  IconGrid,
+  IconLeaf,
+  IconPencil,
+  IconTree,
+  PageTitle,
+  SectionTitle,
+} from '../components/Icons'
+import {
   subscribeField,
+  updateField,
   updateFieldSpecies,
 } from '../features/fields/api'
 import {
@@ -19,15 +29,17 @@ import {
   updateTreeDetails,
   updateTreeSchema,
 } from '../features/trees/api'
+import { FieldPlowPanel } from '../features/plow/FieldPlowPanel'
 import { TreeGrid } from '../features/trees/TreeGrid'
-import { buildRowLetters, formatCell, rowIndexToLetter } from '../lib/cells'
+import { formatCell, rowIndexToLetter } from '../lib/cells'
 import { useAuth } from '../lib/auth'
+import { formatTreeAge } from '../lib/treeAge'
 import type { Field, Tree, TreeHealth } from '../types'
 
 export function FieldDetailPage() {
   const { fieldId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { farmId } = useAuth()
+  const { farmId, user } = useAuth()
   const [field, setField] = useState<Field | null>(null)
   const [trees, setTrees] = useState<Tree[]>([])
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
@@ -40,6 +52,8 @@ export function FieldDetailPage() {
   const [editPlantedAt, setEditPlantedAt] = useState('')
   const [editHealth, setEditHealth] = useState<TreeHealth | ''>('')
   const [editNotes, setEditNotes] = useState('')
+  const [bulkArea, setBulkArea] = useState('')
+  const [bulkName, setBulkName] = useState('')
   const [bulkSpecies, setBulkSpecies] = useState('')
   const [applySpecies, setApplySpecies] = useState(true)
   const [applyLabel, setApplyLabel] = useState(false)
@@ -56,6 +70,8 @@ export function FieldDetailPage() {
   const [saving, setSaving] = useState(false)
   const [editingTree, setEditingTree] = useState(false)
   const [editingBulkSpecies, setEditingBulkSpecies] = useState(false)
+  const [editingFieldNotes, setEditingFieldNotes] = useState(false)
+  const [fieldNotesDraft, setFieldNotesDraft] = useState('')
   const [editingMultiForm, setEditingMultiForm] = useState(true)
 
   useEffect(() => {
@@ -79,11 +95,14 @@ export function FieldDetailPage() {
   }, [farmId, fieldId])
 
   useEffect(() => {
-    if (field?.species) {
+    if (!field) return
+    setBulkArea(field.area ?? '')
+    setBulkName(field.name)
+    if (field.species) {
       setBulkSpecies(field.species)
       setMultiSpecies(field.species)
     }
-  }, [field?.species])
+  }, [field])
 
   useEffect(() => {
     const cell = searchParams.get('cell')
@@ -302,35 +321,61 @@ export function FieldDetailPage() {
     }
   }
 
+  async function onSaveFieldNotes(event: FormEvent) {
+    event.preventDefault()
+    if (!farmId || !field) return
+    setError(null)
+    setInfo(null)
+    setSaving(true)
+    try {
+      await updateField(farmId, field.id, { notes: fieldNotesDraft })
+      setEditingFieldNotes(false)
+      setInfo('Tarla notu kaydedildi.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Not kaydedilemedi')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function onBulkSpecies(event: FormEvent) {
     event.preventDefault()
     if (!farmId || !field) return
     setError(null)
     setInfo(null)
 
-    const next = bulkSpecies.trim()
-    if (!next) {
+    const nextName = bulkName.trim()
+    const nextSpecies = bulkSpecies.trim()
+    if (!nextName) {
+      setError('Tarla adı gerekli')
+      return
+    }
+    if (!nextSpecies) {
       setError('Çeşit adı gerekli')
       return
     }
 
     setSaving(true)
     try {
-      await updateFieldSpecies(farmId, field.id, next)
+      await updateField(farmId, field.id, {
+        area: bulkArea.trim(),
+        name: nextName,
+        species: nextSpecies,
+      })
       const count = await bulkUpdateTreeSpecies(
         farmId,
         field.id,
         activeTrees.map((t) => t.id),
-        next,
+        nextSpecies,
       )
       setInfo(
         count > 0
-          ? `Çeşit “${next}” olarak güncellendi (${count} ağaç).`
-          : `Tarla çeşidi “${next}” olarak kaydedildi. Henüz ağaç yok.`,
+          ? `Tarla bilgileri güncellendi (${count} ağaç).`
+          : 'Tarla bilgileri kaydedildi. Henüz ağaç yok.',
       )
       setEditingBulkSpecies(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Çeşit güncellenemedi')
+      setError(err instanceof Error ? err.message : 'Bilgiler güncellenemedi')
     } finally {
       setSaving(false)
     }
@@ -521,8 +566,6 @@ export function FieldDetailPage() {
     )
   }
 
-  const rows = buildRowLetters(field.rowCount)
-
   return (
     <div className="page">
       <header className="page-header">
@@ -530,12 +573,64 @@ export function FieldDetailPage() {
           <Link to="/" className="muted small">
             ← Tarlalar
           </Link>
-          <h1>{field.name}</h1>
-          <p className="muted">
-            {field.species ? `Çeşit: ${field.species} · ` : ''}
-            Grid: {rows[0]}–{rows[rows.length - 1]} × 1–{field.colCount} ·{' '}
-            {activeTrees.length} ağaç
+          <PageTitle icon={<IconFields />} tone="green">
+            {field.name}
+          </PageTitle>
+          <p className="field-summary-line">
+            {[
+              field.area?.trim() || null,
+              field.name,
+              field.species?.trim() || null,
+              `${activeTrees.length} ağaç`,
+            ]
+              .filter(Boolean)
+              .join(' → ')}
           </p>
+          {editingFieldNotes ? (
+            <form className="field-notes-edit" onSubmit={onSaveFieldNotes}>
+              <label>
+                Tarla notu
+                <textarea
+                  rows={3}
+                  value={fieldNotesDraft}
+                  onChange={(e) => setFieldNotesDraft(e.target.value)}
+                  placeholder="Veri Girmek İçin Dokunun.."
+                />
+              </label>
+              <div className="bulk-actions">
+                <button className="btn primary" type="submit" disabled={saving}>
+                  {saving ? 'Kaydediliyor…' : 'Kaydet'}
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setEditingFieldNotes(false)}
+                >
+                  İptal
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="field-notes-view">
+              <button
+                type="button"
+                className="btn ghost btn-icon"
+                aria-label="Notu düzenle"
+                title="Notu düzenle"
+                onClick={() => {
+                  setFieldNotesDraft(field.notes ?? '')
+                  setEditingFieldNotes(true)
+                }}
+              >
+                <IconPencil />
+              </button>
+              {field.notes?.trim() ? (
+                <p className="field-general-notes">{field.notes.trim()}</p>
+              ) : (
+                <p className="muted small">Tarla notu yok.</p>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -546,9 +641,19 @@ export function FieldDetailPage() {
       )}
       {info && <p className="success">{info}</p>}
 
+      {farmId && user && (
+        <FieldPlowPanel
+          farmId={farmId}
+          fieldId={field.id}
+          userId={user.uid}
+        />
+      )}
+
       {multiSelect && (
         <section className="panel stack">
-          <h2>Seçime bilgi uygula · {multiSelected.size} hücre</h2>
+          <SectionTitle icon={<IconGrid />} tone="sky">
+            Seçime bilgi uygula · {multiSelected.size} hücre
+          </SectionTitle>
           <p className="muted small">
             {multiFilled.length} dolu · {multiEmpty.length} boş seçili. Grid
             üzerindeki araç çubuğundan seçimi değiştir.
@@ -637,7 +742,7 @@ export function FieldDetailPage() {
                 <input
                   value={multiSpecies}
                   onChange={(e) => setMultiSpecies(e.target.value)}
-                  placeholder="Örn. Gemlik"
+                  placeholder="Veri Girmek İçin Dokunun.."
                 />
               )}
 
@@ -653,7 +758,7 @@ export function FieldDetailPage() {
                 <input
                   value={multiLabel}
                   onChange={(e) => setMultiLabel(e.target.value)}
-                  placeholder="Örn. ilaçlandı"
+                  placeholder="Veri Girmek İçin Dokunun.."
                 />
               )}
 
@@ -712,7 +817,7 @@ export function FieldDetailPage() {
                   rows={3}
                   value={multiNotes}
                   onChange={(e) => setMultiNotes(e.target.value)}
-                  placeholder="Seçili ağaçlara ortak not"
+                  placeholder="Veri Girmek İçin Dokunun.."
                 />
               )}
 
@@ -732,12 +837,26 @@ export function FieldDetailPage() {
 
       {!multiSelect && (
         <section className="panel">
-          <h2>Toplu çeşit</h2>
-          {!editingBulkSpecies && field.species ? (
+          <SectionTitle icon={<IconLeaf />} tone="olive">
+            Tarla bilgileri
+          </SectionTitle>
+          {!editingBulkSpecies && (field.species || field.area) ? (
             <div className="info-summary stack">
               <dl className="summary-list">
-                <dt>Çeşit</dt>
-                <dd>{field.species}</dd>
+                {field.area?.trim() && (
+                  <>
+                    <dt>Yer</dt>
+                    <dd>{field.area}</dd>
+                  </>
+                )}
+                <dt>Tarla</dt>
+                <dd>{field.name}</dd>
+                {field.species?.trim() && (
+                  <>
+                    <dt>Çeşit</dt>
+                    <dd>{field.species}</dd>
+                  </>
+                )}
                 <dt>Ağaç</dt>
                 <dd>{activeTrees.length}</dd>
               </dl>
@@ -745,7 +864,12 @@ export function FieldDetailPage() {
                 <button
                   type="button"
                   className="btn primary"
-                  onClick={() => setEditingBulkSpecies(true)}
+                  onClick={() => {
+                    setBulkArea(field.area ?? '')
+                    setBulkName(field.name)
+                    setBulkSpecies(field.species ?? '')
+                    setEditingBulkSpecies(true)
+                  }}
                 >
                   Bilgileri düzenle
                 </button>
@@ -760,21 +884,38 @@ export function FieldDetailPage() {
               </div>
             </div>
           ) : (
-            <form className="bulk-species-form" onSubmit={onBulkSpecies}>
+            <form className="bulk-species-form form-grid" onSubmit={onBulkSpecies}>
               <label>
-                Ağaç çeşidi
+                Yer
                 <input
-                  value={bulkSpecies}
-                  onChange={(e) => setBulkSpecies(e.target.value)}
-                  placeholder="Örn. Gemlik"
+                  value={bulkArea}
+                  onChange={(e) => setBulkArea(e.target.value)}
+                  placeholder="Veri Girmek İçin Dokunun.."
+                />
+              </label>
+              <label>
+                Tarla adı
+                <input
+                  value={bulkName}
+                  onChange={(e) => setBulkName(e.target.value)}
+                  placeholder="Veri Girmek İçin Dokunun.."
                   required
                 />
               </label>
-              <div className="bulk-actions">
+              <label>
+                Çeşit
+                <input
+                  value={bulkSpecies}
+                  onChange={(e) => setBulkSpecies(e.target.value)}
+                  placeholder="Veri Girmek İçin Dokunun.."
+                  required
+                />
+              </label>
+              <div className="bulk-actions span-2">
                 <button className="btn primary" type="submit" disabled={saving}>
                   {saving
                     ? 'İşleniyor…'
-                    : `Tüm ağaçlara uygula (${activeTrees.length})`}
+                    : `Kaydet ve ağaçlara uygula (${activeTrees.length})`}
                 </button>
                 <button
                   className="btn ghost"
@@ -784,7 +925,7 @@ export function FieldDetailPage() {
                 >
                   Boş hücreleri doldur ({emptyCellCount})
                 </button>
-                {field.species && (
+                {(field.species || field.area) && (
                   <button
                     type="button"
                     className="btn ghost"
@@ -820,7 +961,9 @@ export function FieldDetailPage() {
         <aside className="panel sticky-panel">
           {multiSelect ? (
             <>
-              <h2>Seçim özeti</h2>
+              <SectionTitle icon={<IconGrid />} tone="sky">
+                Seçim özeti
+              </SectionTitle>
               <p className="muted">
                 {multiSelected.size === 0
                   ? 'Grid’den dokunarak seçim yap.'
@@ -829,7 +972,9 @@ export function FieldDetailPage() {
             </>
           ) : (
             <>
-              <h2>Hücre</h2>
+              <SectionTitle icon={<IconTree />} tone="green">
+                Hücre
+              </SectionTitle>
               {!selectedCell ? (
                 <p className="muted">
                   Tek hücre için dokun. Çoklu düzenleme için “Çoklu seçim”e geç.
@@ -845,7 +990,7 @@ export function FieldDetailPage() {
                       <input
                         value={editSpecies}
                         onChange={(e) => setEditSpecies(e.target.value)}
-                        placeholder="Örn. Gemlik"
+                        placeholder="Veri Girmek İçin Dokunun.."
                       />
                     </label>
                     <label>
@@ -853,7 +998,7 @@ export function FieldDetailPage() {
                       <input
                         value={editLabel}
                         onChange={(e) => setEditLabel(e.target.value)}
-                        placeholder="Örn. yeniden dikildi"
+                        placeholder="Veri Girmek İçin Dokunun.."
                       />
                     </label>
                     <label>
@@ -864,6 +1009,11 @@ export function FieldDetailPage() {
                         onChange={(e) => setEditPlantedAt(e.target.value)}
                       />
                     </label>
+                    {formatTreeAge(editPlantedAt) && (
+                      <p className="muted small">
+                        Yaş: <strong>{formatTreeAge(editPlantedAt)}</strong>
+                      </p>
+                    )}
                     <label>
                       Sağlık
                       <select
@@ -890,7 +1040,7 @@ export function FieldDetailPage() {
                         rows={4}
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
-                        placeholder="Bakım, gözlem, ihtiyaç…"
+                        placeholder="Veri Girmek İçin Dokunun.."
                       />
                     </label>
                     <button
@@ -928,6 +1078,8 @@ export function FieldDetailPage() {
                       <dd>{selectedTree.label || '—'}</dd>
                       <dt>Dikim</dt>
                       <dd>{selectedTree.plantedAt || '—'}</dd>
+                      <dt>Yaş</dt>
+                      <dd>{formatTreeAge(selectedTree.plantedAt) || '—'}</dd>
                       <dt>Sağlık</dt>
                       <dd>
                         {selectedTree.health
@@ -964,7 +1116,7 @@ export function FieldDetailPage() {
                     <input
                       value={species}
                       onChange={(e) => setSpecies(e.target.value)}
-                      placeholder={field.species || 'Opsiyonel'}
+                      placeholder="Veri Girmek İçin Dokunun.."
                     />
                   </label>
                   <label>
@@ -972,7 +1124,7 @@ export function FieldDetailPage() {
                     <input
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Opsiyonel"
+                      placeholder="Veri Girmek İçin Dokunun.."
                     />
                   </label>
                   <button className="btn primary" type="submit" disabled={saving}>
@@ -982,17 +1134,6 @@ export function FieldDetailPage() {
               )}
             </>
           )}
-
-          <div className="standards-box">
-            <h3>Sürme pencereleri</h3>
-            <ul>
-              {field.plowStandard.windows.map((w) => (
-                <li key={w.id}>
-                  {w.label}: {w.startMonthDay} → {w.endMonthDay}
-                </li>
-              ))}
-            </ul>
-          </div>
         </aside>
       </div>
     </div>

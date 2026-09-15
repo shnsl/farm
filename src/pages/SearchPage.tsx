@@ -1,5 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  HeadingIcon,
+  IconList,
+  IconSearch,
+  IconTree,
+  PageTitle,
+  SectionTitle,
+} from '../components/Icons'
 import { subscribeFields } from '../features/fields/api'
 import {
   searchFarmTrees,
@@ -7,6 +15,7 @@ import {
   type TreeSearchHit,
 } from '../features/trees/api'
 import { useAuth } from '../lib/auth'
+import { formatTreeAge } from '../lib/treeAge'
 import type { Field } from '../types'
 
 export function SearchPage() {
@@ -73,7 +82,9 @@ export function SearchPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <h1>Ara</h1>
+          <PageTitle icon={<IconSearch />} tone="sky">
+            Ara
+          </PageTitle>
           <p className="muted">
             Tüm tarlalarda hücre, çeşit, etiket, not veya sağlık bilgisine göre ara.
           </p>
@@ -86,7 +97,7 @@ export function SearchPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Örn. A-12, Gemlik, hasta…"
+            placeholder="Veri Girmek İçin Dokunun.."
             autoFocus
           />
         </label>
@@ -103,10 +114,10 @@ export function SearchPage() {
 
       {searched && !loading && (
         <section className="stack-gap">
-          <h2>
+          <SectionTitle icon={<IconList />} tone="teal">
             Sonuçlar{' '}
             <span className="muted small">({hits.length})</span>
-          </h2>
+          </SectionTitle>
           {hits.length === 0 ? (
             <p className="muted">Eşleşen kayıt yok.</p>
           ) : (
@@ -122,6 +133,11 @@ export function SearchPage() {
                       )
                     }
                   >
+                    <span className="field-card-icon">
+                      <HeadingIcon tone="olive">
+                        <IconTree />
+                      </HeadingIcon>
+                    </span>
                     <strong>
                       {hit.fieldName} · {hit.tree.cell}
                     </strong>
@@ -133,6 +149,7 @@ export function SearchPage() {
                           ? TREE_HEALTH_LABELS[hit.tree.health]
                           : null,
                         hit.tree.plantedAt,
+                        formatTreeAge(hit.tree.plantedAt),
                       ]
                         .filter(Boolean)
                         .join(' · ') || 'Detay yok'}

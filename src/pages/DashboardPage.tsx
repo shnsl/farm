@@ -1,5 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { CollapseSection } from '../components/CollapseSection'
+import {
+  HeadingIcon,
+  IconFields,
+  IconPlus,
+  IconTree,
+  PageTitle,
+  SectionTitle,
+} from '../components/Icons'
 import {
   createField,
   createFieldSchema,
@@ -65,7 +74,9 @@ export function DashboardPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <h1>Tarlalar</h1>
+          <PageTitle icon={<IconFields />} tone="green">
+            Tarlalar
+          </PageTitle>
           <p className="muted">
             Her tarla satır (A…) × sütun (1…) hücre grid’i ile takip edilir.
           </p>
@@ -78,24 +89,23 @@ export function DashboardPage() {
         </p>
       )}
 
-      <section className="panel">
-        <h2>Yeni tarla</h2>
+      <CollapseSection title="Yeni tarla" icon={<IconPlus />} tone="teal">
         <form className="form-grid" onSubmit={onCreate}>
           <label>
-            Ad
+            Tarla adı
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Örn. Kuzey bahçe"
+              placeholder="Veri Girmek İçin Dokunun.."
               required
             />
           </label>
           <label>
-            Ağaç çeşidi
+            Çeşit
             <input
               value={species}
               onChange={(e) => setSpecies(e.target.value)}
-              placeholder="Örn. Gemlik, Ayvalık"
+              placeholder="Veri Girmek İçin Dokunun.."
             />
           </label>
           <label>
@@ -139,7 +149,7 @@ export function DashboardPage() {
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Opsiyonel"
+              placeholder="Veri Girmek İçin Dokunun.."
             />
           </label>
           <button className="btn primary" type="submit" disabled={saving}>
@@ -150,10 +160,12 @@ export function DashboardPage() {
               : 'Tarla ekle'}
           </button>
         </form>
-      </section>
+      </CollapseSection>
 
       <section className="stack-gap">
-        <h2>Kayıtlı tarlalar</h2>
+        <SectionTitle icon={<IconTree />} tone="olive">
+          Kayıtlı tarlalar
+        </SectionTitle>
         {fields.length === 0 ? (
           <p className="muted">Henüz tarla yok. Yukarıdan ilk tarlayı ekle.</p>
         ) : (
@@ -161,11 +173,20 @@ export function DashboardPage() {
             {fields.map((field) => (
               <li key={field.id}>
                 <Link to={`/fields/${field.id}`} className="field-card">
+                  <span className="field-card-icon">
+                    <HeadingIcon tone="green">
+                      <IconFields />
+                    </HeadingIcon>
+                  </span>
                   <strong>{field.name}</strong>
                   <span className="muted">
-                    {field.species ? `${field.species} · ` : ''}
-                    {field.rowCount} satır × {field.colCount} sütun · yılda{' '}
-                    {field.plowStandard.timesPerYear} sürüm
+                    {[
+                      field.area?.trim() || null,
+                      field.species?.trim() || null,
+                      `${field.rowCount}×${field.colCount}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </span>
                 </Link>
               </li>

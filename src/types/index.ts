@@ -44,6 +44,8 @@ export interface Field {
   rowCount: number
   /** Sütun sayısı (1..N) — boyundaki ağaç sayısı */
   colCount: number
+  /** Yer / bölge (örn. Buldum Fıstık) */
+  area?: string
   /** Tarlanın varsayılan / toplu ağaç çeşidi */
   species?: string
   notes?: string
@@ -82,10 +84,30 @@ export interface CareEvent {
   createdAt: string
 }
 
+export type PlowDirection = 'enine' | 'boyuna'
+
 export interface PlowEvent {
   id: string
-  windowId: string
   doneAt: string
+  direction: PlowDirection
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface HarvestEvent {
+  id: string
+  doneAt: string
+  /** O seneki hasatta çalışan işçi sayısı */
+  workerCount: number
+  /** Günlük yevmiye (birim para) */
+  dailyWage: number
+  /** İşçilere ödenen toplam tutar */
+  totalPaid: number
+  /** Tahmini hasat edilen kilo */
+  estimatedKg?: number
+  /** Ürün ortalama fiyatı (birim / kg) */
+  avgPricePerKg?: number
   notes?: string
   createdBy: string
   createdAt: string

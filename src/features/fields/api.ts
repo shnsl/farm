@@ -11,11 +11,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { z } from 'zod'
-import {
-  defaultPlowWindows,
-  defaultTimesPerYear,
-} from '../../config/plowWindows'
-import type { Field, PlowStandard } from '../../types'
+import type { Field } from '../../types'
 import { db } from '../../lib/firebase'
 import { fillEmptyCellsWithSpecies } from '../trees/api'
 
@@ -23,8 +19,9 @@ export const createFieldSchema = z.object({
   name: z.string().trim().min(1, 'Tarla adı gerekli').max(80),
   rowCount: z.coerce.number().int().min(1).max(26),
   colCount: z.coerce.number().int().min(1).max(200),
+  area: z.string().trim().max(80).optional(),
   species: z.string().trim().max(80).optional(),
-  notes: z.string().trim().max(500).optional(),
+  notes: z.string().trim().max(4000).optional(),
   /** Çeşit varsa tüm hücrelere o çeşit ile ağaç ekle */
   fillGrid: z.boolean().optional().default(false),
 })
@@ -32,19 +29,18 @@ export const createFieldSchema = z.object({
 export type CreateFieldInput = z.infer<typeof createFieldSchema>
 
 function mapField(id: string, data: Record<string, unknown>): Field {
-  const plow = (data.plowStandard as PlowStandard | undefined) ?? {
-    timesPerYear: defaultTimesPerYear,
-    windows: defaultPlowWindows,
-  }
-
   return {
     id,
     name: String(data.name ?? ''),
     rowCount: Number(data.rowCount ?? 1),
     colCount: Number(data.colCount ?? 1),
+    area: data.area ? String(data.area) : undefined,
     species: data.species ? String(data.species) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
-    plowStandard: plow,
+    plowStandard: {
+      timesPerYear: 0,
+      windows: [],
+    },
     createdAt: String(data.createdAtIso ?? ''),
     updatedAt: String(data.updatedAtIso ?? ''),
   }
@@ -100,12 +96,9 @@ export async function createField(
     name: parsed.name,
     rowCount: parsed.rowCount,
     colCount: parsed.colCount,
+    area: parsed.area || null,
     species,
     notes: parsed.notes || null,
-    plowStandard: {
-      timesPerYear: defaultTimesPerYear,
-      windows: defaultPlowWindows,
-    },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdAtIso: now,
@@ -151,11 +144,18 @@ export async function updateField(
   patch: Partial<Omit<CreateFieldInput, 'fillGrid'>>,
 ): Promise<void> {
   const now = new Date().toISOString()
-  await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId), {
-    ...patch,
+  const payload: Record<string, unknown> = {
     updatedAt: serverTimestamp(),
     updatedAtIso: now,
-  })
+  }
+  if (patch.name !== undefined) payload.name = patch.name.trim()
+  if (patch.rowCount !== undefined) payload.rowCount = patch.rowCount
+  if (patch.colCount !== undefined) payload.colCount = patch.colCount
+  if (patch.area !== undefined) payload.area = patch.area.trim() || null
+  if (patch.species !== undefined) payload.species = patch.species.trim() || null
+  if (patch.notes !== undefined) payload.notes = patch.notes.trim() || null
+
+  await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId), payload)
 }
 
 export async function deleteField(

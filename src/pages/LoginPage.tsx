@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { DEFAULT_PIN, useAuth } from '../lib/auth'
+import { useAuth } from '../lib/auth'
 
 export function LoginPage() {
   const { user, loading, loginWithPin, error, clearError } = useAuth()
@@ -18,7 +18,7 @@ export function LoginPage() {
     setFormError(null)
 
     if (!/^\d{6}$/.test(pin)) {
-      setFormError('6 haneli şifre gir')
+      setFormError('Şifreyi kontrol et')
       return
     }
 
@@ -35,9 +35,18 @@ export function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-panel">
+        <div className="auth-brand-icon">
+          <img
+            className="auth-app-icon"
+            src={`${import.meta.env.BASE_URL}pwa-192.png`}
+            alt=""
+            width={64}
+            height={64}
+          />
+        </div>
         <p className="eyebrow">Tarla Ağaç Takip</p>
         <h1>Giriş yap</h1>
-        <p className="muted">6 haneli şifreni gir.</p>
+        <p className="muted">Şifreni gir.</p>
 
         <form className="stack" onSubmit={onSubmit}>
           <label>
@@ -73,11 +82,6 @@ export function LoginPage() {
             {submitting ? 'Bekle…' : 'Giriş yap'}
           </button>
         </form>
-
-        <p className="muted small">
-          İlk kurulumda varsayılan şifre <strong>{DEFAULT_PIN}</strong>. Ayarlar’dan
-          değiştirebilirsin.
-        </p>
       </div>
     </div>
   )
