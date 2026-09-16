@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const base = process.env.BASE_PATH || '/'
 
+
 export default defineConfig({
   base,
   plugins: [
