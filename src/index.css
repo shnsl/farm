@@ -1,7 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600&display=swap');
+@font-face {
+  /* Yer tutucu; asıl yüzler FontProvider tarafından enjekte edilir */
+  font-family: Inter;
+  src: url('/fonts/Inter-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light;
+  --app-font: Inter, system-ui, sans-serif;
   --bg: #eef3ea;
   --bg-accent: #d9e6d0;
   --surface: #fbfcf8;
@@ -21,7 +29,7 @@
   --cell-empty: #edf2e9;
   --cell-empty-border: #d5e0cf;
   --radius: 14px;
-  font-family: 'Source Sans 3', Georgia, sans-serif;
+  font-family: var(--app-font);
   line-height: 1.45;
   font-weight: 400;
   color: var(--ink);
@@ -81,7 +89,7 @@ h1,
 h2,
 h3,
 .brand {
-  font-family: Fraunces, Georgia, serif;
+  font-family: var(--app-font);
   letter-spacing: -0.02em;
 }
 
@@ -334,7 +342,21 @@ html[data-theme='dark'] .heading-icon.tone-olive {
 .field-card-icon {
   position: absolute;
   top: 0.9rem;
-  right: 0.9rem;
+  left: 0.9rem;
+}
+
+.field-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem;
+  padding-left: 3.4rem;
+  padding-right: 3.4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: inherit;
+  box-shadow: var(--shadow);
 }
 
 .auth-brand-icon {
@@ -433,6 +455,45 @@ textarea:focus {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.font-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.55rem;
+}
+
+.font-picker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.font-picker-option:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+}
+
+.font-picker-option.is-selected {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+.font-picker-name {
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+
+.font-picker-sample {
+  line-height: 1.3;
 }
 
 .field-summary-line {
@@ -695,21 +756,25 @@ input:focus {
   gap: 0.75rem;
 }
 
-.field-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 1rem 1.1rem;
-  padding-right: 3.2rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: inherit;
-  box-shadow: var(--shadow);
+.field-list-item {
+  position: relative;
 }
 
 .field-card:hover {
   border-color: var(--brand);
+}
+
+.field-delete-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
+}
+
+.field-delete-btn.btn.danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  color: var(--danger);
 }
 
 .field-layout {
@@ -905,9 +970,139 @@ input:focus {
   font-size: 0.92rem;
 }
 
-.event-list-preview {
-  max-height: 14.5rem;
-  overflow-y: auto;
+.fertilize-edit-item {
+  display: block;
+  padding: 0.65rem 0.7rem;
+}
+
+.fertilize-edit-item .form-grid {
+  margin: 0;
+}
+
+.field-map-panel {
+  margin-top: 0.25rem;
+}
+
+.field-map-empty,
+.field-map-summary {
+  gap: 0.75rem;
+}
+
+.field-map-file-btn {
+  display: inline-flex;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.field-map-viewport {
+  position: relative;
+  height: min(52vh, 360px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1a221c;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.field-map-viewport:active {
+  cursor: grabbing;
+}
+
+.field-map-stage {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.field-map-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.field-map-north {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #0f1712 72%, transparent);
+  color: #f4f7f2;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+.field-map-north-arrow {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.field-map-zoom-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+}
+
+.field-map-zoom-btn {
+  width: 2.35rem;
+  height: 2.35rem;
+  min-width: 2.35rem;
+  min-height: 2.35rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--brand-strong);
+}
+
+.field-map-zoom-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+  border-color: transparent;
+  color: var(--brand-strong);
+}
+
+.field-map-zoom-btn:disabled {
+  opacity: 0.35;
+}
+
+.field-map-zoom-btn svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.field-map-zoom-out svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.field-map-zoom-in svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.field-map-zoom-label {
+  margin-left: 0.35rem;
+  margin-right: 0.45rem;
+  min-width: 2.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 .event-list-modal {
@@ -1021,6 +1216,38 @@ html[data-theme='dark'] .legend-paid {
   background: #e0b35a;
 }
 
+.legend-fert-cost {
+  background: #2f6b3c;
+}
+
+.legend-fert-count {
+  background: #8a5a2b;
+}
+
+html[data-theme='dark'] .legend-fert-cost {
+  background: #6faf7d;
+}
+
+html[data-theme='dark'] .legend-fert-count {
+  background: #d4a06a;
+}
+
+.legend-prune-wage {
+  background: #6b4ea0;
+}
+
+.legend-prune-days {
+  background: #3d7a8c;
+}
+
+html[data-theme='dark'] .legend-prune-wage {
+  background: #a88fd4;
+}
+
+html[data-theme='dark'] .legend-prune-days {
+  background: #6eb8c9;
+}
+
 .harvest-chart-scroll {
   overflow-x: auto;
 }
@@ -1048,6 +1275,38 @@ html[data-theme='dark'] .chart-bar-value {
 
 html[data-theme='dark'] .chart-bar-paid {
   fill: #e0b35a;
+}
+
+.chart-bar-fert-cost {
+  fill: #2f6b3c;
+}
+
+.chart-bar-fert-count {
+  fill: #8a5a2b;
+}
+
+html[data-theme='dark'] .chart-bar-fert-cost {
+  fill: #6faf7d;
+}
+
+html[data-theme='dark'] .chart-bar-fert-count {
+  fill: #d4a06a;
+}
+
+.chart-bar-prune-wage {
+  fill: #6b4ea0;
+}
+
+.chart-bar-prune-days {
+  fill: #3d7a8c;
+}
+
+html[data-theme='dark'] .chart-bar-prune-wage {
+  fill: #a88fd4;
+}
+
+html[data-theme='dark'] .chart-bar-prune-days {
+  fill: #6eb8c9;
 }
 
 .chart-label {

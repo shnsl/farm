@@ -85,6 +85,38 @@ export function IconSearch(props: IconProps) {
   )
 }
 
+export function IconZoomOut(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10.5" cy="10.5" r="5.75" />
+      <path d="M15.2 15.2 20 20" />
+      <path d="M8 10.5h5" />
+    </Svg>
+  )
+}
+
+export function IconZoomIn(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10.5" cy="10.5" r="5.75" />
+      <path d="M15.2 15.2 20 20" />
+      <path d="M10.5 8v5M8 10.5h5" />
+    </Svg>
+  )
+}
+
+export function IconZoomReset(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 9V5h4" />
+      <path d="M20 9V5h-4" />
+      <path d="M4 15v4h4" />
+      <path d="M20 15v4h-4" />
+      <rect x="8" y="8" width="8" height="8" rx="1" />
+    </Svg>
+  )
+}
+
 export function IconSettings(props: IconProps) {
   return (
     <Svg {...props}>
@@ -108,6 +140,18 @@ export function IconLeaf(props: IconProps) {
     <Svg {...props}>
       <path d="M5 19c8-1 12-6 14-14-8 2-13 6-14 14Z" />
       <path d="M5 19c2-4 6-7 11-9" />
+    </Svg>
+  )
+}
+
+export function IconPrune(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="7" cy="7" r="2.5" />
+      <circle cx="7" cy="17" r="2.5" />
+      <path d="M9.2 8.5 20 17" />
+      <path d="M9.2 15.5 20 7" />
+      <path d="M7 9.5v5" />
     </Svg>
   )
 }
@@ -171,6 +215,17 @@ export function IconPencil(props: IconProps) {
     <Svg {...props}>
       <path d="m14.5 4.5 5 5L9 20H4v-5L14.5 4.5Z" />
       <path d="m12.5 6.5 5 5" />
+    </Svg>
+  )
+}
+
+export function IconTrash(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" />
+      <path d="M10 11v6M14 11v6" />
     </Svg>
   )
 }

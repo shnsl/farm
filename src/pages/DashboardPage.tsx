@@ -5,6 +5,7 @@ import {
   HeadingIcon,
   IconFields,
   IconPlus,
+  IconTrash,
   IconTree,
   PageTitle,
   SectionTitle,
@@ -12,9 +13,11 @@ import {
 import {
   createField,
   createFieldSchema,
+  deleteField,
   subscribeFields,
 } from '../features/fields/api'
 import { useAuth } from '../lib/auth'
+import { confirmDelete } from '../lib/confirmDelete'
 import type { Field } from '../types'
 
 export function DashboardPage() {
@@ -25,9 +28,11 @@ export function DashboardPage() {
   const [rowCount, setRowCount] = useState(12)
   const [colCount, setColCount] = useState(80)
   const [species, setSpecies] = useState('')
+  const [donum, setDonum] = useState('')
   const [fillGrid, setFillGrid] = useState(true)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!farmId) return
@@ -37,6 +42,24 @@ export function DashboardPage() {
       (err) => setError(err.message),
     )
   }, [farmId])
+
+  async function onDeleteField(field: Field) {
+    if (!farmId) return
+    const ok = confirmDelete(
+      `“${field.name}” tarlasını silmek istediğine emin misin? Bu işlem geri alınamaz.`,
+    )
+    if (!ok) return
+
+    setError(null)
+    setDeletingId(field.id)
+    try {
+      await deleteField(farmId, field.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Tarla silinemedi')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   async function onCreate(event: FormEvent) {
     event.preventDefault()
@@ -48,6 +71,7 @@ export function DashboardPage() {
       rowCount,
       colCount,
       species,
+      donum: donum === '' ? undefined : Number(donum),
       notes,
       fillGrid: Boolean(species.trim()) && fillGrid,
     })
@@ -61,6 +85,7 @@ export function DashboardPage() {
       await createField(farmId, parsed.data)
       setName('')
       setSpecies('')
+      setDonum('')
       setNotes('')
       setFillGrid(true)
     } catch (err) {
@@ -89,14 +114,14 @@ export function DashboardPage() {
         </p>
       )}
 
-      <CollapseSection title="Yeni tarla" icon={<IconPlus />} tone="teal">
+      <CollapseSection title="Yeni Tarla" icon={<IconPlus />} tone="teal">
         <form className="form-grid" onSubmit={onCreate}>
           <label>
             Tarla adı
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
               required
             />
           </label>
@@ -105,7 +130,18 @@ export function DashboardPage() {
             <input
               value={species}
               onChange={(e) => setSpecies(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
+            />
+          </label>
+          <label>
+            Dönüm
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={donum}
+              onChange={(e) => setDonum(e.target.value)}
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <label>
@@ -149,7 +185,7 @@ export function DashboardPage() {
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <button className="btn primary" type="submit" disabled={saving}>
@@ -164,14 +200,14 @@ export function DashboardPage() {
 
       <section className="stack-gap">
         <SectionTitle icon={<IconTree />} tone="olive">
-          Kayıtlı tarlalar
+          Kayıtlı Tarlalar
         </SectionTitle>
         {fields.length === 0 ? (
           <p className="muted">Henüz tarla yok. Yukarıdan ilk tarlayı ekle.</p>
         ) : (
           <ul className="field-list">
             {fields.map((field) => (
-              <li key={field.id}>
+              <li key={field.id} className="field-list-item">
                 <Link to={`/fields/${field.id}`} className="field-card">
                   <span className="field-card-icon">
                     <HeadingIcon tone="green">
@@ -183,12 +219,27 @@ export function DashboardPage() {
                     {[
                       field.area?.trim() || null,
                       field.species?.trim() || null,
+                      field.donum !== undefined
+                        ? `${field.donum.toLocaleString('tr-TR')} dönüm`
+                        : null,
                       `${field.rowCount}×${field.colCount}`,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  className="btn danger btn-icon field-delete-btn"
+                  disabled={deletingId === field.id}
+                  aria-label={
+                    deletingId === field.id ? 'Siliniyor' : 'Tarlayı sil'
+                  }
+                  title="Tarlayı sil"
+                  onClick={() => void onDeleteField(field)}
+                >
+                  <IconTrash />
+                </button>
               </li>
             ))}
           </ul>

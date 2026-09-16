@@ -30,6 +30,7 @@ import {
   updateHarvestEvent,
 } from './api'
 import { YearlyHarvestChart } from './YearlyHarvestChart'
+import { confirmDelete } from '../../lib/confirmDelete'
 import type { HarvestEvent, PlowDirection, PlowEvent } from '../../types'
 
 interface FieldPlowPanelProps {
@@ -303,6 +304,13 @@ export function FieldPlowPanel({
           className="btn ghost btn-compact"
           disabled={saving}
           onClick={() => {
+            if (
+              !confirmDelete(
+                'Bu Sürüm kaydı silinsin mi? Bu işlem geri alınamaz.',
+              )
+            ) {
+              return
+            }
             void deletePlowEvent(farmId, fieldId, p.id).catch((err) =>
               setError(err instanceof Error ? err.message : 'Silinemedi'),
             )
@@ -336,6 +344,13 @@ export function FieldPlowPanel({
           className="btn ghost btn-compact"
           disabled={saving}
           onClick={() => {
+            if (
+              !confirmDelete(
+                'Bu Hasat kaydı silinsin mi? Bu işlem geri alınamaz.',
+              )
+            ) {
+              return
+            }
             void deleteHarvestEvent(farmId, fieldId, h.id).catch((err) =>
               setError(err instanceof Error ? err.message : 'Silinemedi'),
             )
@@ -378,7 +393,7 @@ export function FieldPlowPanel({
         ))}
       </div>
 
-      <CollapseSection title="Sürüm kaydı" icon={<IconPlow />} tone="amber">
+      <CollapseSection title="Sürüm Kaydı" icon={<IconPlow />} tone="amber">
         <form className="form-grid" onSubmit={onAddPlow}>
           <label>
             Tarih
@@ -404,7 +419,7 @@ export function FieldPlowPanel({
             <input
               value={plowNotes}
               onChange={(e) => setPlowNotes(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <button className="btn primary" type="submit" disabled={saving}>
@@ -413,7 +428,7 @@ export function FieldPlowPanel({
         </form>
       </CollapseSection>
 
-      <CollapseSection title="Hasat kaydı" icon={<IconHarvest />} tone="olive">
+      <CollapseSection title="Hasat Kaydı" icon={<IconHarvest />} tone="olive">
         <form className="form-grid" onSubmit={onAddHarvest}>
           <label>
             Tarih
@@ -474,7 +489,7 @@ export function FieldPlowPanel({
               step={0.1}
               value={estimatedKg}
               onChange={(e) => setEstimatedKg(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <label>
@@ -485,7 +500,7 @@ export function FieldPlowPanel({
               step={0.01}
               value={avgPricePerKg}
               onChange={(e) => setAvgPricePerKg(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <p className="muted small span-2">
@@ -496,7 +511,7 @@ export function FieldPlowPanel({
             <input
               value={harvestNotes}
               onChange={(e) => setHarvestNotes(e.target.value)}
-              placeholder="Veri Girmek İçin Dokunun.."
+              placeholder="Veri girmek için dokunun.."
             />
           </label>
           <p className="muted small span-2">
@@ -511,7 +526,7 @@ export function FieldPlowPanel({
 
       {harvestByYear.length > 0 && (
         <CollapseSection
-          title="Hasat istatistikleri"
+          title="Hasat İstatistikleri"
           icon={<IconCompare />}
           tone="sky"
         >
@@ -701,8 +716,8 @@ export function FieldPlowPanel({
             disabled={plows.length <= PREVIEW_LIMIT}
             aria-label={
               plows.length > PREVIEW_LIMIT
-                ? 'Eski sürüm kayıtlarını aç'
-                : 'Son sürümler'
+                ? 'Eski Sürüm kayıtlarını aç'
+                : 'Son Sürümler'
             }
           >
             <span className="section-title-with-icon">
@@ -710,7 +725,7 @@ export function FieldPlowPanel({
                 <IconList />
               </HeadingIcon>
               <span>
-                Son sürümler
+                Son Sürümler
                 {plows.length > PREVIEW_LIMIT && (
                   <span className="muted small title-more-hint">
                     {' '}
@@ -721,7 +736,7 @@ export function FieldPlowPanel({
             </span>
           </button>
           {plows.length === 0 ? (
-            <p className="muted small">Henüz sürüm yok.</p>
+            <p className="muted small">Henüz Sürüm yok.</p>
           ) : (
             <ul className="event-list event-list-preview">
               {plows.slice(0, PREVIEW_LIMIT).map(renderPlowItem)}
@@ -738,7 +753,7 @@ export function FieldPlowPanel({
             disabled={harvests.length <= PREVIEW_LIMIT}
             aria-label={
               harvests.length > PREVIEW_LIMIT
-                ? 'Eski hasat kayıtlarını aç'
+                ? 'Eski Hasat kayıtlarını aç'
                 : 'Hasatlar'
             }
           >
@@ -758,7 +773,7 @@ export function FieldPlowPanel({
             </span>
           </button>
           {harvests.length === 0 ? (
-            <p className="muted small">Henüz hasat yok.</p>
+            <p className="muted small">Henüz Hasat yok.</p>
           ) : (
             <ul className="event-list event-list-preview">
               {harvests.slice(0, PREVIEW_LIMIT).map(renderHarvestItem)}
@@ -769,7 +784,7 @@ export function FieldPlowPanel({
 
       {chartModalOpen && (
         <Modal
-          title="Hasat istatistikleri (yıllara göre)"
+          title="Hasat İstatistikleri (Yıllara Göre)"
           onClose={() => setChartModalOpen(false)}
         >
           <YearlyHarvestChart harvests={harvestByYear} />
@@ -777,7 +792,7 @@ export function FieldPlowPanel({
       )}
 
       {plowModalOpen && (
-        <Modal title="Eski sürümler" onClose={() => setPlowModalOpen(false)}>
+        <Modal title="Eski Sürümler" onClose={() => setPlowModalOpen(false)}>
           <ul className="event-list event-list-modal">
             {plows.slice(PREVIEW_LIMIT).map(renderPlowItem)}
           </ul>
@@ -785,7 +800,7 @@ export function FieldPlowPanel({
       )}
 
       {harvestModalOpen && (
-        <Modal title="Eski hasatlar" onClose={() => setHarvestModalOpen(false)}>
+        <Modal title="Eski Hasatlar" onClose={() => setHarvestModalOpen(false)}>
           <ul className="event-list event-list-modal">
             {harvests.slice(PREVIEW_LIMIT).map(renderHarvestItem)}
           </ul>

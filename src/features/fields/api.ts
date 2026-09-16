@@ -20,6 +20,7 @@ export const createFieldSchema = z.object({
   rowCount: z.coerce.number().int().min(1).max(26),
   colCount: z.coerce.number().int().min(1).max(200),
   area: z.string().trim().max(80).optional(),
+  donum: z.coerce.number().min(0, 'Dönüm 0 veya daha büyük olmalı').optional(),
   species: z.string().trim().max(80).optional(),
   notes: z.string().trim().max(4000).optional(),
   /** Çeşit varsa tüm hücrelere o çeşit ile ağaç ekle */
@@ -28,6 +29,12 @@ export const createFieldSchema = z.object({
 
 export type CreateFieldInput = z.infer<typeof createFieldSchema>
 
+function optionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const n = Number(value)
+  return Number.isNaN(n) ? undefined : n
+}
+
 function mapField(id: string, data: Record<string, unknown>): Field {
   return {
     id,
@@ -35,8 +42,14 @@ function mapField(id: string, data: Record<string, unknown>): Field {
     rowCount: Number(data.rowCount ?? 1),
     colCount: Number(data.colCount ?? 1),
     area: data.area ? String(data.area) : undefined,
+    donum: optionalNumber(data.donum),
     species: data.species ? String(data.species) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
+    mapImageDataUrl: data.mapImageDataUrl
+      ? String(data.mapImageDataUrl)
+      : undefined,
+    mapFileName: data.mapFileName ? String(data.mapFileName) : undefined,
+    mapUpdatedAt: data.mapUpdatedAt ? String(data.mapUpdatedAt) : undefined,
     plowStandard: {
       timesPerYear: 0,
       windows: [],
@@ -97,6 +110,7 @@ export async function createField(
     rowCount: parsed.rowCount,
     colCount: parsed.colCount,
     area: parsed.area || null,
+    donum: parsed.donum === undefined ? null : parsed.donum,
     species,
     notes: parsed.notes || null,
     createdAt: serverTimestamp(),
@@ -152,10 +166,45 @@ export async function updateField(
   if (patch.rowCount !== undefined) payload.rowCount = patch.rowCount
   if (patch.colCount !== undefined) payload.colCount = patch.colCount
   if (patch.area !== undefined) payload.area = patch.area.trim() || null
+  if (Object.prototype.hasOwnProperty.call(patch, 'donum')) {
+    const value = patch.donum
+    payload.donum =
+      value === undefined || value === null || Number.isNaN(Number(value))
+        ? null
+        : Number(value)
+  }
   if (patch.species !== undefined) payload.species = patch.species.trim() || null
   if (patch.notes !== undefined) payload.notes = patch.notes.trim() || null
 
   await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId), payload)
+}
+
+export async function updateFieldMapImage(
+  farmId: string,
+  fieldId: string,
+  input: {
+    mapImageDataUrl: string | null
+    mapFileName?: string | null
+  },
+): Promise<void> {
+  const now = new Date().toISOString()
+  const dataUrl = input.mapImageDataUrl?.trim() || null
+  if (dataUrl && dataUrl.length > 1_200_000) {
+    throw new Error('Fotoğraf çok büyük; daha küçük bir görsel dene')
+  }
+  if (dataUrl && !/^data:image\/(jpeg|jpg|png);base64,/i.test(dataUrl)) {
+    throw new Error('Geçersiz görsel formatı')
+  }
+  await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId), {
+    mapImageDataUrl: dataUrl,
+    mapFileName: dataUrl ? input.mapFileName?.trim() || 'tarla.jpg' : null,
+    mapUpdatedAt: dataUrl ? now : null,
+    kmlContent: null,
+    kmlFileName: null,
+    kmlUpdatedAt: null,
+    updatedAt: serverTimestamp(),
+    updatedAtIso: now,
+  })
 }
 
 export async function deleteField(

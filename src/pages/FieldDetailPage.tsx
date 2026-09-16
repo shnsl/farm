@@ -9,11 +9,13 @@ import {
   PageTitle,
   SectionTitle,
 } from '../components/Icons'
+import { CollapseSection } from '../components/CollapseSection'
 import {
   subscribeField,
   updateField,
   updateFieldSpecies,
 } from '../features/fields/api'
+import { FieldMapImagePanel } from '../features/fields/FieldMapImagePanel'
 import {
   bulkClearTreeDetails,
   bulkDeleteTrees,
@@ -29,10 +31,13 @@ import {
   updateTreeDetails,
   updateTreeSchema,
 } from '../features/trees/api'
+import { FieldCarePanel } from '../features/care/FieldCarePanel'
+import { FieldPrunePanel } from '../features/prune/FieldPrunePanel'
 import { FieldPlowPanel } from '../features/plow/FieldPlowPanel'
 import { TreeGrid } from '../features/trees/TreeGrid'
 import { formatCell, rowIndexToLetter } from '../lib/cells'
 import { useAuth } from '../lib/auth'
+import { confirmDelete } from '../lib/confirmDelete'
 import { formatTreeAge } from '../lib/treeAge'
 import type { Field, Tree, TreeHealth } from '../types'
 
@@ -55,6 +60,7 @@ export function FieldDetailPage() {
   const [bulkArea, setBulkArea] = useState('')
   const [bulkName, setBulkName] = useState('')
   const [bulkSpecies, setBulkSpecies] = useState('')
+  const [bulkDonum, setBulkDonum] = useState('')
   const [applySpecies, setApplySpecies] = useState(true)
   const [applyLabel, setApplyLabel] = useState(false)
   const [applyPlantedAt, setApplyPlantedAt] = useState(false)
@@ -98,6 +104,7 @@ export function FieldDetailPage() {
     if (!field) return
     setBulkArea(field.area ?? '')
     setBulkName(field.name)
+    setBulkDonum(field.donum !== undefined ? String(field.donum) : '')
     if (field.species) {
       setBulkSpecies(field.species)
       setMultiSpecies(field.species)
@@ -300,6 +307,11 @@ export function FieldDetailPage() {
 
   async function onRemoveTree() {
     if (!farmId || !field || !selectedTree) return
+    const ok = confirmDelete(
+      `${selectedTree.cell} hücresindeki ağaç kaldırılsın mı? Bu işlem geri alınamaz.`,
+    )
+    if (!ok) return
+
     setSaving(true)
     setError(null)
     setInfo(null)
@@ -361,6 +373,7 @@ export function FieldDetailPage() {
         area: bulkArea.trim(),
         name: nextName,
         species: nextSpecies,
+        donum: bulkDonum === '' ? undefined : Number(bulkDonum),
       })
       const count = await bulkUpdateTreeSpecies(
         farmId,
@@ -497,6 +510,11 @@ export function FieldDetailPage() {
 
   async function onClearMultiInfo() {
     if (!farmId || !field || multiFilled.length === 0) return
+    const ok = confirmDelete(
+      `${multiFilled.length} seçili ağacın bilgileri temizlensin mi? Bu işlem geri alınamaz.`,
+    )
+    if (!ok) return
+
     setError(null)
     setInfo(null)
     setSaving(true)
@@ -527,7 +545,7 @@ export function FieldDetailPage() {
 
   async function onDeleteMultiTrees() {
     if (!farmId || !field || multiFilled.length === 0) return
-    const ok = window.confirm(
+    const ok = confirmDelete(
       `${multiFilled.length} seçili ağaç kaldırılsın mı? Bu işlem geri alınamaz.`,
     )
     if (!ok) return
@@ -581,6 +599,9 @@ export function FieldDetailPage() {
               field.area?.trim() || null,
               field.name,
               field.species?.trim() || null,
+              field.donum !== undefined
+                ? `${field.donum.toLocaleString('tr-TR')} dönüm`
+                : null,
               `${activeTrees.length} ağaç`,
             ]
               .filter(Boolean)
@@ -589,12 +610,12 @@ export function FieldDetailPage() {
           {editingFieldNotes ? (
             <form className="field-notes-edit" onSubmit={onSaveFieldNotes}>
               <label>
-                Tarla notu
+                Tarla Notu
                 <textarea
                   rows={3}
                   value={fieldNotesDraft}
                   onChange={(e) => setFieldNotesDraft(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                 />
               </label>
               <div className="bulk-actions">
@@ -627,7 +648,7 @@ export function FieldDetailPage() {
               {field.notes?.trim() ? (
                 <p className="field-general-notes">{field.notes.trim()}</p>
               ) : (
-                <p className="muted small">Tarla notu yok.</p>
+                <p className="muted small">Tarla Notu yok.</p>
               )}
             </div>
           )}
@@ -640,6 +661,22 @@ export function FieldDetailPage() {
         </p>
       )}
       {info && <p className="success">{info}</p>}
+
+      {farmId && user && (
+        <FieldCarePanel
+          farmId={farmId}
+          fieldId={field.id}
+          userId={user.uid}
+        />
+      )}
+
+      {farmId && user && (
+        <FieldPrunePanel
+          farmId={farmId}
+          fieldId={field.id}
+          userId={user.uid}
+        />
+      )}
 
       {farmId && user && (
         <FieldPlowPanel
@@ -742,7 +779,7 @@ export function FieldDetailPage() {
                 <input
                   value={multiSpecies}
                   onChange={(e) => setMultiSpecies(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                 />
               )}
 
@@ -758,7 +795,7 @@ export function FieldDetailPage() {
                 <input
                   value={multiLabel}
                   onChange={(e) => setMultiLabel(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                 />
               )}
 
@@ -817,7 +854,7 @@ export function FieldDetailPage() {
                   rows={3}
                   value={multiNotes}
                   onChange={(e) => setMultiNotes(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                 />
               )}
 
@@ -838,7 +875,7 @@ export function FieldDetailPage() {
       {!multiSelect && (
         <section className="panel">
           <SectionTitle icon={<IconLeaf />} tone="olive">
-            Tarla bilgileri
+            Tarla Bilgileri
           </SectionTitle>
           {!editingBulkSpecies && (field.species || field.area) ? (
             <div className="info-summary stack">
@@ -857,6 +894,12 @@ export function FieldDetailPage() {
                     <dd>{field.species}</dd>
                   </>
                 )}
+                {field.donum !== undefined && (
+                  <>
+                    <dt>Dönüm</dt>
+                    <dd>{field.donum.toLocaleString('tr-TR')}</dd>
+                  </>
+                )}
                 <dt>Ağaç</dt>
                 <dd>{activeTrees.length}</dd>
               </dl>
@@ -868,6 +911,9 @@ export function FieldDetailPage() {
                     setBulkArea(field.area ?? '')
                     setBulkName(field.name)
                     setBulkSpecies(field.species ?? '')
+                    setBulkDonum(
+                      field.donum !== undefined ? String(field.donum) : '',
+                    )
                     setEditingBulkSpecies(true)
                   }}
                 >
@@ -890,7 +936,7 @@ export function FieldDetailPage() {
                 <input
                   value={bulkArea}
                   onChange={(e) => setBulkArea(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                 />
               </label>
               <label>
@@ -898,7 +944,7 @@ export function FieldDetailPage() {
                 <input
                   value={bulkName}
                   onChange={(e) => setBulkName(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                   required
                 />
               </label>
@@ -907,8 +953,19 @@ export function FieldDetailPage() {
                 <input
                   value={bulkSpecies}
                   onChange={(e) => setBulkSpecies(e.target.value)}
-                  placeholder="Veri Girmek İçin Dokunun.."
+                  placeholder="Veri girmek için dokunun.."
                   required
+                />
+              </label>
+              <label>
+                Dönüm
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={bulkDonum}
+                  onChange={(e) => setBulkDonum(e.target.value)}
+                  placeholder="Veri girmek için dokunun.."
                 />
               </label>
               <div className="bulk-actions span-2">
@@ -990,7 +1047,7 @@ export function FieldDetailPage() {
                       <input
                         value={editSpecies}
                         onChange={(e) => setEditSpecies(e.target.value)}
-                        placeholder="Veri Girmek İçin Dokunun.."
+                        placeholder="Veri girmek için dokunun.."
                       />
                     </label>
                     <label>
@@ -998,7 +1055,7 @@ export function FieldDetailPage() {
                       <input
                         value={editLabel}
                         onChange={(e) => setEditLabel(e.target.value)}
-                        placeholder="Veri Girmek İçin Dokunun.."
+                        placeholder="Veri girmek için dokunun.."
                       />
                     </label>
                     <label>
@@ -1040,7 +1097,7 @@ export function FieldDetailPage() {
                         rows={4}
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
-                        placeholder="Veri Girmek İçin Dokunun.."
+                        placeholder="Veri girmek için dokunun.."
                       />
                     </label>
                     <button
@@ -1116,7 +1173,7 @@ export function FieldDetailPage() {
                     <input
                       value={species}
                       onChange={(e) => setSpecies(e.target.value)}
-                      placeholder="Veri Girmek İçin Dokunun.."
+                      placeholder="Veri girmek için dokunun.."
                     />
                   </label>
                   <label>
@@ -1124,7 +1181,7 @@ export function FieldDetailPage() {
                     <input
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Veri Girmek İçin Dokunun.."
+                      placeholder="Veri girmek için dokunun.."
                     />
                   </label>
                   <button className="btn primary" type="submit" disabled={saving}>
@@ -1136,6 +1193,18 @@ export function FieldDetailPage() {
           )}
         </aside>
       </div>
+
+      {farmId && (
+        <CollapseSection title="Tarla Haritası" icon={<IconFields />} tone="teal">
+          <FieldMapImagePanel
+            farmId={farmId}
+            fieldId={field.id}
+            mapImageDataUrl={field.mapImageDataUrl}
+            mapFileName={field.mapFileName}
+            mapUpdatedAt={field.mapUpdatedAt}
+          />
+        </CollapseSection>
+      )}
     </div>
   )
 }

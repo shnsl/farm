@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './lib/auth'
+import { FontProvider } from './lib/font'
 import { ThemeProvider } from './lib/theme'
 import { DashboardPage } from './pages/DashboardPage'
 import { FieldDetailPage } from './pages/FieldDetailPage'
@@ -14,22 +15,24 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter basename={basename}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/fields/:fieldId" element={<FieldDetailPage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+      <FontProvider>
+        <AuthProvider>
+          <BrowserRouter basename={basename}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/fields/:fieldId" element={<FieldDetailPage />} />
+                  <Route path="/search" element={<SearchPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </FontProvider>
     </ThemeProvider>
   )
 }

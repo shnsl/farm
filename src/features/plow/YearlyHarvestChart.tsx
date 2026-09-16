@@ -54,7 +54,7 @@ export function YearlyHarvestChart({ harvests }: { harvests: HarvestEvent[] }) {
   const stats = useMemo(() => aggregateHarvestByYear(harvests), [harvests])
 
   if (stats.length === 0) {
-    return <p className="muted small">Grafik için hasat kaydı yok.</p>
+    return <p className="muted small">Grafik için Hasat kaydı yok.</p>
   }
 
   const maxKg = Math.max(...stats.map((s) => s.estimatedKg), 1)
@@ -84,7 +84,7 @@ export function YearlyHarvestChart({ harvests }: { harvests: HarvestEvent[] }) {
           width={chartW}
           height={chartH}
           role="img"
-          aria-label="Yıllara göre hasat istatistikleri"
+          aria-label="Yıllara göre Hasat istatistikleri"
         >
           {[0, 0.25, 0.5, 0.75, 1].map((t) => {
             const y = padT + plotH * (1 - t)

@@ -46,9 +46,17 @@ export interface Field {
   colCount: number
   /** Yer / bölge (örn. Buldum Fıstık) */
   area?: string
+  /** Tarla büyüklüğü (dönüm) */
+  donum?: number
   /** Tarlanın varsayılan / toplu ağaç çeşidi */
   species?: string
   notes?: string
+  /** Tarla alanı harita fotoğrafı (sıkıştırılmış JPEG data URL) */
+  mapImageDataUrl?: string
+  /** Yüklenen harita dosya adı */
+  mapFileName?: string
+  /** Harita fotoğrafı son güncelleme (ISO) */
+  mapUpdatedAt?: string
   plowStandard: PlowStandard
   createdAt: string
   updatedAt: string
@@ -108,6 +116,38 @@ export interface HarvestEvent {
   estimatedKg?: number
   /** Ürün ortalama fiyatı (birim / kg) */
   avgPricePerKg?: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface FertilizeEvent {
+  id: string
+  /** Gübreleme tarihi */
+  doneAt: string
+  /** Gübre cinsi */
+  fertilizerType: string
+  /** Gübreleme masrafı */
+  cost: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface PruneEvent {
+  id: string
+  /** Budama tarihi */
+  doneAt: string
+  /** İşçi sayısı */
+  workerCount: number
+  /** Elçi (ustabaşı) adı */
+  foremanName: string
+  /** Elçi telefonu */
+  foremanPhone: string
+  /** İşçi başı yevmiye */
+  dailyWage: number
+  /** Budama süresi (gün) */
+  durationDays: number
   notes?: string
   createdBy: string
   createdAt: string

@@ -9,9 +9,11 @@ import {
 } from '../components/Icons'
 import { careStandards } from '../config/careStandards'
 import { useAuth } from '../lib/auth'
+import { useFont } from '../lib/font'
 
 export function SettingsPage() {
   const { farmId, changePin } = useAuth()
+  const { fontId, fonts, setFontId } = useFont()
   const [currentPin, setCurrentPin] = useState('')
   const [nextPin, setNextPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -54,13 +56,42 @@ export function SettingsPage() {
           <PageTitle icon={<IconSettings />} tone="violet">
             Ayarlar
           </PageTitle>
-          <p className="muted">PIN, config standartları ve güvenlik notları.</p>
+          <p className="muted">PIN, yazı tipi, standartlar ve güvenlik notları.</p>
         </div>
       </header>
 
       <section className="panel stack">
+        <SectionTitle icon={<IconSettings />} tone="teal">
+          Yazı Tipi
+        </SectionTitle>
+        <p className="muted small">
+          Türkçe karakterleri (ğüşıöç) destekleyen yazı tipleri. Seçim bu cihazda
+          saklanır.
+        </p>
+        <div className="font-picker" role="radiogroup" aria-label="Yazı Tipi">
+          {fonts.map((font) => {
+            const selected = font.id === fontId
+            return (
+              <button
+                key={font.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`font-picker-option${selected ? ' is-selected' : ''}`}
+                style={{ fontFamily: font.stack }}
+                onClick={() => setFontId(font.id)}
+              >
+                <span className="font-picker-name">{font.label}</span>
+                <span className="font-picker-sample muted small">{font.sample}</span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="panel stack">
         <SectionTitle icon={<IconLock />} tone="amber">
-          Şifre değiştir
+          Şifre Değiştir
         </SectionTitle>
         <p className="muted small">
           PIN Firebase Auth’ta tutulur. Değişiklik anında geçerli olur.
@@ -125,7 +156,7 @@ export function SettingsPage() {
 
       <section className="panel stack">
         <SectionTitle icon={<IconLeaf />} tone="green">
-          Bakım standartları
+          Bakım Standartları
         </SectionTitle>
         <p className="muted">
           Kaynak: <code>src/config/careStandards.ts</code>

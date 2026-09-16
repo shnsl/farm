@@ -97,7 +97,7 @@ export function SearchPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Veri Girmek İçin Dokunun.."
+            placeholder="Veri girmek için dokunun.."
             autoFocus
           />
         </label>
