@@ -47,7 +47,7 @@ export const APP_FONTS: AppFontOption[] = [
     stack: '"Montserrat", system-ui, sans-serif',
     file: 'Montserrat-Regular.ttf',
     format: 'truetype',
-    sample: 'Gübreleme, budama, sürüm',
+    sample: 'Gübreleme, Budama, Sürüm',
   },
   {
     id: 'lato',

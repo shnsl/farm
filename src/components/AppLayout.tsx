@@ -51,7 +51,7 @@ export function AppLayout() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ara.."
+            placeholder="Ara…"
             aria-label="Ara"
           />
         </form>
