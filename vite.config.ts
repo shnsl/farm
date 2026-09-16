@@ -45,6 +45,8 @@ export default defineConfig({
       workbox: {
         navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,otf,ttf}'],
+        // SF Pro Display Regular ~2.23 MB; varsayılan 2 MiB limiti aşıyor
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
     }),
   ],
