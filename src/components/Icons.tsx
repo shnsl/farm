@@ -156,6 +156,16 @@ export function IconPrune(props: IconProps) {
   )
 }
 
+export function IconHoe(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 21 14 8" />
+      <path d="M12.5 10.5 19 7l1.5 3-6 4.5" />
+      <path d="M4 19h8" />
+    </Svg>
+  )
+}
+
 export function IconShield(props: IconProps) {
   return (
     <Svg {...props}>

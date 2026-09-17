@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
+  IconCompare,
   IconFields,
   IconMoon,
   IconSearch,
@@ -40,6 +41,10 @@ export function AppLayout() {
           <NavLink to="/search">
             <IconSearch />
             Ara
+          </NavLink>
+          <NavLink to="/stats">
+            <IconCompare />
+            İstatistikler
           </NavLink>
           <NavLink to="/settings">
             <IconSettings />

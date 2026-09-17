@@ -32,10 +32,11 @@ import {
   updateTreeSchema,
 } from '../features/trees/api'
 import { FieldCarePanel } from '../features/care/FieldCarePanel'
+import { FieldHoePanel } from '../features/hoe/FieldHoePanel'
 import { FieldPrunePanel } from '../features/prune/FieldPrunePanel'
 import { FieldPlowPanel } from '../features/plow/FieldPlowPanel'
 import { TreeGrid } from '../features/trees/TreeGrid'
-import { formatCell, rowIndexToLetter } from '../lib/cells'
+import { formatCell, letterToRowIndex, rowIndexToLetter } from '../lib/cells'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
 import { formatTreeAge } from '../lib/treeAge'
@@ -61,6 +62,8 @@ export function FieldDetailPage() {
   const [bulkName, setBulkName] = useState('')
   const [bulkSpecies, setBulkSpecies] = useState('')
   const [bulkDonum, setBulkDonum] = useState('')
+  const [bulkRowCount, setBulkRowCount] = useState(12)
+  const [bulkColCount, setBulkColCount] = useState(80)
   const [applySpecies, setApplySpecies] = useState(true)
   const [applyLabel, setApplyLabel] = useState(false)
   const [applyPlantedAt, setApplyPlantedAt] = useState(false)
@@ -105,6 +108,8 @@ export function FieldDetailPage() {
     setBulkArea(field.area ?? '')
     setBulkName(field.name)
     setBulkDonum(field.donum !== undefined ? String(field.donum) : '')
+    setBulkRowCount(field.rowCount)
+    setBulkColCount(field.colCount)
     if (field.species) {
       setBulkSpecies(field.species)
       setMultiSpecies(field.species)
@@ -358,6 +363,8 @@ export function FieldDetailPage() {
 
     const nextName = bulkName.trim()
     const nextSpecies = bulkSpecies.trim()
+    const nextRowCount = Number(bulkRowCount)
+    const nextColCount = Number(bulkColCount)
     if (!nextName) {
       setError('Tarla adı gerekli')
       return
@@ -365,6 +372,38 @@ export function FieldDetailPage() {
     if (!nextSpecies) {
       setError('Çeşit adı gerekli')
       return
+    }
+    if (
+      !Number.isInteger(nextRowCount) ||
+      nextRowCount < 1 ||
+      nextRowCount > 26
+    ) {
+      setError('En (satır) 1–26 arasında olmalı')
+      return
+    }
+    if (
+      !Number.isInteger(nextColCount) ||
+      nextColCount < 1 ||
+      nextColCount > 200
+    ) {
+      setError('Boy (sütun) 1–200 arasında olmalı')
+      return
+    }
+
+    const outside = activeTrees.filter((tree) => {
+      const rowIndex = letterToRowIndex(tree.row)
+      return (
+        rowIndex < 0 ||
+        rowIndex >= nextRowCount ||
+        tree.col < 1 ||
+        tree.col > nextColCount
+      )
+    })
+    if (outside.length > 0) {
+      const ok = confirmDelete(
+        `Yeni en/boy dışında ${outside.length} ağaç kalacak (grid’de görünmez). Devam edilsin mi?`,
+      )
+      if (!ok) return
     }
 
     setSaving(true)
@@ -374,6 +413,8 @@ export function FieldDetailPage() {
         name: nextName,
         species: nextSpecies,
         donum: bulkDonum === '' ? undefined : Number(bulkDonum),
+        rowCount: nextRowCount,
+        colCount: nextColCount,
       })
       const count = await bulkUpdateTreeSpecies(
         farmId,
@@ -663,6 +704,14 @@ export function FieldDetailPage() {
       {info && <p className="success">{info}</p>}
 
       {farmId && user && (
+        <FieldPlowPanel
+          farmId={farmId}
+          fieldId={field.id}
+          userId={user.uid}
+        />
+      )}
+
+      {farmId && user && (
         <FieldCarePanel
           farmId={farmId}
           fieldId={field.id}
@@ -679,7 +728,7 @@ export function FieldDetailPage() {
       )}
 
       {farmId && user && (
-        <FieldPlowPanel
+        <FieldHoePanel
           farmId={farmId}
           fieldId={field.id}
           userId={user.uid}
@@ -877,7 +926,7 @@ export function FieldDetailPage() {
           <SectionTitle icon={<IconLeaf />} tone="olive">
             Tarla Bilgileri
           </SectionTitle>
-          {!editingBulkSpecies && (field.species || field.area) ? (
+          {!editingBulkSpecies ? (
             <div className="info-summary stack">
               <dl className="summary-list">
                 {field.area?.trim() && (
@@ -900,6 +949,15 @@ export function FieldDetailPage() {
                     <dd>{field.donum.toLocaleString('tr-TR')}</dd>
                   </>
                 )}
+                <dt>En</dt>
+                <dd>
+                  {field.rowCount} satır (A–
+                  {rowIndexToLetter(Math.max(0, field.rowCount - 1))})
+                </dd>
+                <dt>Boy</dt>
+                <dd>
+                  {field.colCount} sütun (1–{field.colCount})
+                </dd>
                 <dt>Ağaç</dt>
                 <dd>{activeTrees.length}</dd>
               </dl>
@@ -914,6 +972,8 @@ export function FieldDetailPage() {
                     setBulkDonum(
                       field.donum !== undefined ? String(field.donum) : '',
                     )
+                    setBulkRowCount(field.rowCount)
+                    setBulkColCount(field.colCount)
                     setEditingBulkSpecies(true)
                   }}
                 >
@@ -968,6 +1028,31 @@ export function FieldDetailPage() {
                   placeholder="Veri girmek için dokunun.."
                 />
               </label>
+              <label>
+                En (satır — harfler)
+                <input
+                  type="number"
+                  min={1}
+                  max={26}
+                  value={bulkRowCount}
+                  onChange={(e) => setBulkRowCount(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label>
+                Boy (sütun — numaralar)
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={bulkColCount}
+                  onChange={(e) => setBulkColCount(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <p className="muted small span-2">
+                En/boy değiştirmek Tarla İçeriği grid’ini büyütür veya küçültür.
+              </p>
               <div className="bulk-actions span-2">
                 <button className="btn primary" type="submit" disabled={saving}>
                   {saving
@@ -982,15 +1067,14 @@ export function FieldDetailPage() {
                 >
                   Boş hücreleri doldur ({emptyCellCount})
                 </button>
-                {(field.species || field.area) && (
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => setEditingBulkSpecies(false)}
-                  >
-                    İptal
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn ghost"
+                  disabled={saving}
+                  onClick={() => setEditingBulkSpecies(false)}
+                >
+                  İptal
+                </button>
               </div>
             </form>
           )}

@@ -54,6 +54,21 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+/** Sekme yenilemede kalır; uygulama/sekme kapanınca silinir. */
+const SESSION_UNLOCK_KEY = 'farm-session-unlocked'
+
+function markSessionUnlocked() {
+  sessionStorage.setItem(SESSION_UNLOCK_KEY, '1')
+}
+
+function clearSessionUnlock() {
+  sessionStorage.removeItem(SESSION_UNLOCK_KEY)
+}
+
+function isSessionUnlocked(): boolean {
+  return sessionStorage.getItem(SESSION_UNLOCK_KEY) === '1'
+}
+
 function toIso(value: unknown): string {
   if (value instanceof Timestamp) {
     return value.toDate().toISOString()
@@ -152,6 +167,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null)
           return
         }
+
+        // Firebase oturumu kalıcı; uygulama kapanınca session bayrağı gider → PIN iste
+        if (!isSessionUnlocked()) {
+          clearSessionUnlock()
+          await signOut(auth)
+          setUser(null)
+          setProfile(null)
+          return
+        }
+
         setUser(nextUser)
         const nextProfile = await ensureUserFarm(nextUser)
         setProfile(nextProfile)
@@ -175,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       await signInWithEmailAndPassword(auth, FARM_AUTH_EMAIL, pin)
+      markSessionUnlocked()
     } catch (err) {
       const code = authErrorCode(err)
       const missingUser =
@@ -186,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (missingUser && pin === DEFAULT_PIN) {
         try {
           await createUserWithEmailAndPassword(auth, FARM_AUTH_EMAIL, DEFAULT_PIN)
+          markSessionUnlocked()
           return
         } catch (createErr) {
           const createCode = authErrorCode(createErr)
@@ -232,6 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     setError(null)
+    clearSessionUnlock()
     await signOut(auth)
   }, [])
 

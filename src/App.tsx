@@ -9,6 +9,7 @@ import { FieldDetailPage } from './pages/FieldDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { SearchPage } from './pages/SearchPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { StatsPage } from './pages/StatsPage'
 
 export default function App() {
   const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
@@ -25,6 +26,7 @@ export default function App() {
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/fields/:fieldId" element={<FieldDetailPage />} />
                   <Route path="/search" element={<SearchPage />} />
+                  <Route path="/stats" element={<StatsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
               </Route>

@@ -3,7 +3,6 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from 'react'
 import { updateFieldMapImage } from './api'
 import { compressFieldMapImage } from './compressImage'
@@ -35,6 +34,7 @@ export function FieldMapImagePanel({
   const [error, setError] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const viewportRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -46,6 +46,23 @@ export function FieldMapImagePanel({
   useEffect(() => {
     setZoom(1)
     setOffset({ x: 0, y: 0 })
+  }, [mapImageDataUrl])
+
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el || !mapImageDataUrl) return
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault()
+      setZoom((z) => {
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)))
+        if (next <= MIN_ZOOM) setOffset({ x: 0, y: 0 })
+        return next
+      })
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
   }, [mapImageDataUrl])
 
   async function onFileChange(file: File | null) {
@@ -128,12 +145,6 @@ export function FieldMapImagePanel({
     if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null
   }
 
-  function onWheel(e: ReactWheelEvent<HTMLDivElement>) {
-    if (!mapImageDataUrl) return
-    e.preventDefault()
-    zoomBy(e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)
-  }
-
   return (
     <section className="panel stack field-map-panel">
       <p className="muted small">
@@ -158,12 +169,12 @@ export function FieldMapImagePanel({
       {mapImageDataUrl ? (
         <>
           <div
+            ref={viewportRef}
             className="field-map-viewport"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            onWheel={onWheel}
             role="img"
             aria-label="Tarla harita fotoğrafı"
           >

@@ -794,6 +794,39 @@ input:focus {
   max-height: min(70vh, 720px);
 }
 
+.grid-panel-header {
+  margin-bottom: 0.35rem;
+}
+
+.grid-panel-header .section-title-with-icon {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.species-legend {
+  list-style: none;
+  margin: 0 0 0.65rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+}
+
+.species-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.species-legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
 .tree-grid {
   display: grid;
   gap: 3px;
@@ -841,12 +874,13 @@ input:focus {
 }
 
 .cell.filled {
-  background: color-mix(in srgb, var(--filled) 42%, var(--cell-empty));
-  border-color: color-mix(in srgb, var(--filled) 70%, var(--line));
+  --species: var(--filled);
+  background: color-mix(in srgb, var(--species) 42%, var(--cell-empty));
+  border-color: color-mix(in srgb, var(--species) 70%, var(--line));
 }
 
 .cell.filled.has-info {
-  background-color: var(--filled);
+  background-color: var(--species);
   background-image: repeating-linear-gradient(
     -45deg,
     transparent,
@@ -854,7 +888,7 @@ input:focus {
     rgba(255, 255, 255, 0.22) 3px,
     rgba(255, 255, 255, 0.22) 6px
   );
-  border-color: var(--brand-strong);
+  border-color: color-mix(in srgb, var(--species) 75%, #000);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
@@ -1002,6 +1036,7 @@ input:focus {
   border-radius: 12px;
   background: #1a221c;
   touch-action: none;
+  overscroll-behavior: contain;
   cursor: grab;
   user-select: none;
 }
@@ -1309,6 +1344,38 @@ html[data-theme='dark'] .chart-bar-prune-days {
   fill: #6eb8c9;
 }
 
+.legend-hoe-wage {
+  background: #8a5a2b;
+}
+
+.legend-hoe-paid {
+  background: #c28a2e;
+}
+
+html[data-theme='dark'] .legend-hoe-wage {
+  background: #d4a06a;
+}
+
+html[data-theme='dark'] .legend-hoe-paid {
+  background: #e0b35a;
+}
+
+.chart-bar-hoe-wage {
+  fill: #8a5a2b;
+}
+
+.chart-bar-hoe-paid {
+  fill: #c28a2e;
+}
+
+html[data-theme='dark'] .chart-bar-hoe-wage {
+  fill: #d4a06a;
+}
+
+html[data-theme='dark'] .chart-bar-hoe-paid {
+  fill: #e0b35a;
+}
+
 .chart-label {
   fill: var(--muted);
   font-size: 11px;
@@ -1422,6 +1489,90 @@ code {
   border-radius: 6px;
 }
 
+.stats-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.stats-summary-card {
+  gap: 0.35rem;
+}
+
+.stats-summary-value {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--brand-strong);
+}
+
+.stats-share {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 8rem;
+}
+
+.stats-share-bar {
+  flex: 1;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 12%, var(--line));
+  overflow: hidden;
+}
+
+.stats-share-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+}
+
+.stats-year-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.stats-year-bars li {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.stats-year-label {
+  font-weight: 600;
+}
+
+.stats-year-track {
+  height: 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 12%, var(--line));
+  overflow: hidden;
+}
+
+.stats-year-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--brand) 70%, #8a5a2b),
+    var(--brand-strong)
+  );
+}
+
+.stats-year-total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 5.5rem;
+  text-align: right;
+}
+
 @media (max-width: 860px) {
   .topbar {
     flex-wrap: wrap;
@@ -1457,5 +1608,9 @@ code {
 
   .sticky-panel {
     position: static;
+  }
+
+  .stats-summary-grid {
+    grid-template-columns: 1fr;
   }
 }

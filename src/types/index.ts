@@ -153,6 +153,21 @@ export interface PruneEvent {
   createdAt: string
 }
 
+export interface HoeEvent {
+  id: string
+  /** Çapalama tarihi */
+  doneAt: string
+  /** İşçi sayısı */
+  workerCount: number
+  /** İşçi başı yevmiye */
+  dailyWage: number
+  /** Toplam harcama */
+  totalPaid: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
 export interface CareStandard {
   type: CareType
   label: string

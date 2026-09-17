@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { HeadingIcon, IconTree } from '../../components/Icons'
 import { buildRowLetters, formatCell } from '../../lib/cells'
 import { formatTreeAge } from '../../lib/treeAge'
 import type { Tree } from '../../types'
+import { speciesColor } from './speciesColor'
 
 function treeHasInfo(tree: Tree): boolean {
   return Boolean(
@@ -50,8 +52,37 @@ export function TreeGrid({
   const rows = buildRowLetters(rowCount)
   const cols = Array.from({ length: colCount }, (_, i) => i + 1)
 
+  const legend = useMemo(() => {
+    const counts = new Map<string, { label: string; color: string; count: number }>()
+    for (const tree of treeByCell.values()) {
+      if (tree.status !== 'active') continue
+      const label = tree.species?.trim() || 'Belirtilmedi'
+      const current = counts.get(label)
+      if (current) current.count += 1
+      else {
+        counts.set(label, {
+          label,
+          color: speciesColor(tree.species),
+          count: 1,
+        })
+      }
+    }
+    return [...counts.values()].sort(
+      (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'tr'),
+    )
+  }, [treeByCell])
+
   return (
     <div className={`grid-wrap panel${multiSelect ? ' multi-mode' : ''}`}>
+      <div className="grid-panel-header">
+        <h2 className="section-title-with-icon">
+          <HeadingIcon tone="green">
+            <IconTree />
+          </HeadingIcon>
+          <span>Tarla İçeriği</span>
+        </h2>
+      </div>
+
       <div className="grid-toolbar">
         <button
           type="button"
@@ -106,6 +137,23 @@ export function TreeGrid({
 
       {gridVisible ? (
         <>
+          {legend.length > 0 && (
+            <ul className="species-legend" aria-label="Çeşit renkleri">
+              {legend.map((item) => (
+                <li key={item.label}>
+                  <span
+                    className="species-legend-swatch"
+                    style={{ background: item.color }}
+                    aria-hidden
+                  />
+                  <span>
+                    {item.label}{' '}
+                    <span className="muted">({item.count})</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div
             className="tree-grid"
             style={{
@@ -130,6 +178,7 @@ export function TreeGrid({
                 const selected = multiSelect
                   ? multiSelected.has(cell)
                   : selectedCell === cell
+                const color = tree ? speciesColor(tree.species) : undefined
                 return (
                   <button
                     key={cell}
@@ -146,6 +195,11 @@ export function TreeGrid({
                     ]
                       .filter(Boolean)
                       .join(' ')}
+                    style={
+                      color
+                        ? ({ ['--species']: color } as CSSProperties)
+                        : undefined
+                    }
                     title={
                       tree
                         ? [
@@ -175,7 +229,7 @@ export function TreeGrid({
         </>
       ) : (
         <p className="muted small grid-hint">
-          Grid gizli. Açmak için Göster’e bas.
+          Tarla İçeriği gizli. Açmak için Göster’e bas.
         </p>
       )}
     </div>
