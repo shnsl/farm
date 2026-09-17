@@ -10,6 +10,7 @@ export type AppFontId =
   | 'lexend'
   | 'figtree'
   | 'dm-sans'
+  | 'saira'
 
 export interface AppFontOption {
   id: AppFontId
@@ -112,6 +113,14 @@ export const APP_FONTS: AppFontOption[] = [
     file: 'DMSans-Regular.ttf',
     format: 'truetype',
     sample: 'İğde, şeker, özet',
+  },
+  {
+    id: 'saira',
+    label: 'Saira',
+    stack: '"Saira", system-ui, sans-serif',
+    file: 'Saira-Regular.ttf',
+    format: 'truetype',
+    sample: 'Çiftlik, ığdır, şeftali',
   },
 ]
 
