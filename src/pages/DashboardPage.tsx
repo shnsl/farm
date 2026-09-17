@@ -8,7 +8,6 @@ import {
   IconTrash,
   IconTree,
   PageTitle,
-  SectionTitle,
 } from '../components/Icons'
 import {
   createField,
@@ -198,10 +197,13 @@ export function DashboardPage() {
         </form>
       </CollapseSection>
 
-      <section className="stack-gap">
-        <SectionTitle icon={<IconTree />} tone="olive">
-          Kayıtlı Tarlalar
-        </SectionTitle>
+      <CollapseSection
+        title="Kayıtlı Tarlalar"
+        icon={<IconTree />}
+        tone="olive"
+        defaultOpen
+        bodyClassName="stack"
+      >
         {fields.length === 0 ? (
           <p className="muted">Henüz tarla yok. Yukarıdan ilk tarlayı ekle.</p>
         ) : (
@@ -244,7 +246,7 @@ export function DashboardPage() {
             ))}
           </ul>
         )}
-      </section>
+      </CollapseSection>
     </div>
   )
 }

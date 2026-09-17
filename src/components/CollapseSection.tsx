@@ -6,18 +6,30 @@ export function CollapseSection({
   icon,
   tone = 'green',
   defaultOpen = false,
+  className,
+  bodyClassName,
   children,
 }: {
   title: string
   icon: ReactNode
   tone?: IconTone
   defaultOpen?: boolean
+  className?: string
+  bodyClassName?: string
   children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className={`collapse-section${open ? ' is-open' : ''}`}>
+    <div
+      className={[
+        'collapse-section',
+        open ? 'is-open' : '',
+        className ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <button
         type="button"
         className="collapse-toggle"
@@ -32,7 +44,15 @@ export function CollapseSection({
           ▾
         </span>
       </button>
-      {open && <div className="collapse-body">{children}</div>}
+      {open && (
+        <div
+          className={['collapse-body', bodyClassName ?? '']
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {children}
+        </div>
+      )}
     </div>
   )
 }

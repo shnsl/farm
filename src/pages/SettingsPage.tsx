@@ -1,19 +1,25 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type CSSProperties, type FormEvent } from 'react'
+import { CollapseSection } from '../components/CollapseSection'
 import {
-  IconLeaf,
+  IconCalendar,
+  IconFont,
   IconLock,
+  IconPalette,
   IconSettings,
   IconShield,
   PageTitle,
-  SectionTitle,
 } from '../components/Icons'
 import { careStandards } from '../config/careStandards'
+import { useAccent } from '../lib/accent'
 import { useAuth } from '../lib/auth'
 import { useFont } from '../lib/font'
+import { useTheme } from '../lib/theme'
 
 export function SettingsPage() {
   const { farmId, changePin } = useAuth()
   const { fontId, fonts, setFontId } = useFont()
+  const { theme } = useTheme()
+  const { accentId, accents, setAccentId } = useAccent()
   const [currentPin, setCurrentPin] = useState('')
   const [nextPin, setNextPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -56,14 +62,61 @@ export function SettingsPage() {
           <PageTitle icon={<IconSettings />} tone="violet">
             Ayarlar
           </PageTitle>
-          <p className="muted">PIN, yazı tipi, standartlar ve güvenlik notları.</p>
+          <p className="muted">
+            Tema rengi, yazı tipi, PIN, standartlar ve güvenlik notları.
+          </p>
         </div>
       </header>
 
-      <section className="panel stack">
-        <SectionTitle icon={<IconSettings />} tone="teal">
-          Yazı Tipi
-        </SectionTitle>
+      <CollapseSection
+        title="Tema Rengi"
+        icon={<IconPalette />}
+        tone="violet"
+        defaultOpen
+        bodyClassName="stack"
+      >
+        <p className="muted small">
+          Uygulama vurgusu ve arka plan tonu. Açık / koyu moda göre otomatik
+          uyumlanır. Seçim bu cihazda saklanır.
+        </p>
+        <div className="accent-picker" role="radiogroup" aria-label="Tema Rengi">
+          {accents.map((accent) => {
+            const selected = accent.id === accentId
+            return (
+              <button
+                key={accent.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`accent-picker-option${selected ? ' is-selected' : ''}`}
+                onClick={() => setAccentId(accent.id)}
+              >
+                <span
+                  className="accent-picker-swatch"
+                  style={
+                    {
+                      ['--swatch-a']: accent.light.swatch,
+                      ['--swatch-b']: accent.dark.swatch,
+                    } as CSSProperties
+                  }
+                  aria-hidden
+                />
+                <span className="accent-picker-name">{accent.label}</span>
+                <span className="muted small">
+                  {theme === 'dark' ? 'Koyu uyumlu' : 'Açık uyumlu'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </CollapseSection>
+
+      <CollapseSection
+        title="Yazı Tipi"
+        icon={<IconFont />}
+        tone="teal"
+        bodyClassName="stack"
+      >
         <p className="muted small">
           Türkçe karakterleri (ğüşıöç) destekleyen yazı tipleri. Seçim bu cihazda
           saklanır.
@@ -87,12 +140,14 @@ export function SettingsPage() {
             )
           })}
         </div>
-      </section>
+      </CollapseSection>
 
-      <section className="panel stack">
-        <SectionTitle icon={<IconLock />} tone="amber">
-          Şifre Değiştir
-        </SectionTitle>
+      <CollapseSection
+        title="Şifre Değiştir"
+        icon={<IconLock />}
+        tone="amber"
+        bodyClassName="stack"
+      >
         <p className="muted small">
           PIN Firebase Auth’ta tutulur. Değişiklik anında geçerli olur.
         </p>
@@ -152,12 +207,14 @@ export function SettingsPage() {
         <p className="muted small">
           Farm ID: <code>{farmId}</code>
         </p>
-      </section>
+      </CollapseSection>
 
-      <section className="panel stack">
-        <SectionTitle icon={<IconLeaf />} tone="green">
-          Bakım Standartları
-        </SectionTitle>
+      <CollapseSection
+        title="Bakım Standartları"
+        icon={<IconCalendar />}
+        tone="green"
+        bodyClassName="stack"
+      >
         <p className="muted">
           Kaynak: <code>src/config/careStandards.ts</code>
         </p>
@@ -169,12 +226,14 @@ export function SettingsPage() {
             </li>
           ))}
         </ul>
-      </section>
+      </CollapseSection>
 
-      <section className="panel stack">
-        <SectionTitle icon={<IconShield />} tone="sky">
-          Güvenlik
-        </SectionTitle>
+      <CollapseSection
+        title="Güvenlik"
+        icon={<IconShield />}
+        tone="sky"
+        bodyClassName="stack"
+      >
         <ul className="bullets">
           <li>Giriş yalnızca PIN ile yapılır (e-posta sorulmaz).</li>
           <li>
@@ -186,7 +245,7 @@ export function SettingsPage() {
             farm verisine erişmesine izin verir.
           </li>
         </ul>
-      </section>
+      </CollapseSection>
     </div>
   )
 }

@@ -2,9 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   HeadingIcon,
-  IconList,
   IconSearch,
   IconTree,
+  IconVariety,
   PageTitle,
   SectionTitle,
 } from '../components/Icons'
@@ -114,7 +114,7 @@ export function SearchPage() {
 
       {searched && !loading && (
         <section className="stack-gap">
-          <SectionTitle icon={<IconList />} tone="teal">
+          <SectionTitle icon={<IconVariety />} tone="teal">
             Sonuçlar{' '}
             <span className="muted small">({hits.length})</span>
           </SectionTitle>

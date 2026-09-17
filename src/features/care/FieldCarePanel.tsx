@@ -7,9 +7,10 @@ import {
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import {
-  IconCompare,
-  IconLeaf,
-  IconList,
+  IconClipboard,
+  IconDrop,
+  IconFertilizer,
+  IconTrend,
   SectionTitle,
 } from '../../components/Icons'
 import {
@@ -183,11 +184,12 @@ export function FieldCarePanel({
   }
 
   return (
-    <section className="panel stack">
-      <SectionTitle icon={<IconLeaf />} tone="teal">
-        Gübreleme ve Bakım
-      </SectionTitle>
-
+    <CollapseSection
+      title="Gübreleme ve Bakım"
+      icon={<IconFertilizer />}
+      tone="teal"
+      bodyClassName="stack"
+    >
       {error && (
         <p className="error" role="alert">
           {error}
@@ -211,7 +213,7 @@ export function FieldCarePanel({
         )}
       </div>
 
-      <CollapseSection title="Gübreleme Kaydı" icon={<IconLeaf />} tone="green">
+      <CollapseSection title="Gübreleme Kaydı" icon={<IconDrop />} tone="green">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Gübreleme tarihi
@@ -259,7 +261,7 @@ export function FieldCarePanel({
       {byYear.length > 0 && (
         <CollapseSection
           title="Gübreleme Kıyası (Yıllara Göre)"
-          icon={<IconCompare />}
+          icon={<IconTrend />}
           tone="sky"
         >
           <div className="bulk-actions" style={{ marginBottom: '0.65rem' }}>
@@ -307,7 +309,7 @@ export function FieldCarePanel({
       )}
 
       <div>
-        <SectionTitle as="h3" icon={<IconList />} tone="olive">
+        <SectionTitle as="h3" icon={<IconClipboard />} tone="olive">
           Gübreleme Kayıtları
         </SectionTitle>
         {events.length === 0 ? (
@@ -433,6 +435,6 @@ export function FieldCarePanel({
           <YearlyFertilizeChart events={events} />
         </Modal>
       )}
-    </section>
+    </CollapseSection>
   )
 }

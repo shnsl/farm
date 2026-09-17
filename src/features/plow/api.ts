@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import { z } from 'zod'
 import { db } from '../../lib/firebase'
-import type { HarvestEvent, PlowDirection, PlowEvent } from '../../types'
+import type { FuelEvent, HarvestEvent, PlowDirection, PlowEvent } from '../../types'
 
 export const PLOW_DIRECTION_LABELS: Record<PlowDirection, string> = {
   enine: 'Enine',
@@ -41,8 +41,16 @@ export const createHarvestSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 })
 
+export const createFuelSchema = z.object({
+  purchasedAt: z.string().trim().min(1, 'Alım zamanı gerekli'),
+  liters: z.coerce.number().min(0, 'Litre 0 veya daha büyük olmalı'),
+  unitPrice: z.coerce.number().min(0, 'Birim fiyat 0 veya daha büyük olmalı'),
+  notes: z.string().trim().max(500).optional(),
+})
+
 export type CreatePlowInput = z.infer<typeof createPlowSchema>
 export type CreateHarvestInput = z.infer<typeof createHarvestSchema>
+export type CreateFuelInput = z.infer<typeof createFuelSchema>
 
 export function harvestProductValue(h: {
   estimatedKg?: number
@@ -51,6 +59,13 @@ export function harvestProductValue(h: {
   const kg = h.estimatedKg ?? 0
   const price = h.avgPricePerKg ?? 0
   return Number((kg * price).toFixed(2))
+}
+
+export function fuelTotalCost(input: {
+  liters: number
+  unitPrice: number
+}): number {
+  return Number((input.liters * input.unitPrice).toFixed(2))
 }
 
 function mapPlow(id: string, data: Record<string, unknown>): PlowEvent {
@@ -79,6 +94,25 @@ function mapHarvest(id: string, data: Record<string, unknown>): HarvestEvent {
     totalPaid: Number(data.totalPaid ?? 0),
     estimatedKg: optionalNumber(data.estimatedKg),
     avgPricePerKg: optionalNumber(data.avgPricePerKg),
+    notes: data.notes ? String(data.notes) : undefined,
+    createdBy: String(data.createdBy ?? ''),
+    createdAt: String(data.createdAtIso ?? ''),
+  }
+}
+
+function mapFuel(id: string, data: Record<string, unknown>): FuelEvent {
+  const liters = Number(data.liters ?? 0)
+  const unitPrice = Number(data.unitPrice ?? 0)
+  const storedTotal = optionalNumber(data.totalCost)
+  return {
+    id,
+    purchasedAt: String(data.purchasedAt ?? ''),
+    liters,
+    unitPrice,
+    totalCost:
+      storedTotal !== undefined
+        ? storedTotal
+        : fuelTotalCost({ liters, unitPrice }),
     notes: data.notes ? String(data.notes) : undefined,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAtIso ?? ''),
@@ -115,6 +149,23 @@ export function subscribeHarvestEvents(
   return onSnapshot(
     q,
     (snap) => onData(snap.docs.map((d) => mapHarvest(d.id, d.data()))),
+    (err) => onError?.(err),
+  )
+}
+
+export function subscribeFuelEvents(
+  farmId: string,
+  fieldId: string,
+  onData: (events: FuelEvent[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, 'farms', farmId, 'fields', fieldId, 'fuelEvents'),
+    orderBy('purchasedAt', 'desc'),
+  )
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => mapFuel(d.id, d.data()))),
     (err) => onError?.(err),
   )
 }
@@ -209,6 +260,61 @@ export async function deleteHarvestEvent(
 ): Promise<void> {
   await deleteDoc(
     doc(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents', eventId),
+  )
+}
+
+export async function createFuelEvent(
+  farmId: string,
+  fieldId: string,
+  input: CreateFuelInput,
+  createdBy: string,
+): Promise<string> {
+  const parsed = createFuelSchema.parse(input)
+  const now = new Date().toISOString()
+  const totalCost = fuelTotalCost(parsed)
+  const ref = await addDoc(
+    collection(db, 'farms', farmId, 'fields', fieldId, 'fuelEvents'),
+    {
+      purchasedAt: parsed.purchasedAt,
+      liters: parsed.liters,
+      unitPrice: parsed.unitPrice,
+      totalCost,
+      notes: parsed.notes || null,
+      createdBy,
+      createdAt: serverTimestamp(),
+      createdAtIso: now,
+    },
+  )
+  return ref.id
+}
+
+export async function updateFuelEvent(
+  farmId: string,
+  fieldId: string,
+  eventId: string,
+  input: CreateFuelInput,
+): Promise<void> {
+  const parsed = createFuelSchema.parse(input)
+  const totalCost = fuelTotalCost(parsed)
+  await updateDoc(
+    doc(db, 'farms', farmId, 'fields', fieldId, 'fuelEvents', eventId),
+    {
+      purchasedAt: parsed.purchasedAt,
+      liters: parsed.liters,
+      unitPrice: parsed.unitPrice,
+      totalCost,
+      notes: parsed.notes || null,
+    },
+  )
+}
+
+export async function deleteFuelEvent(
+  farmId: string,
+  fieldId: string,
+  eventId: string,
+): Promise<void> {
+  await deleteDoc(
+    doc(db, 'farms', farmId, 'fields', fieldId, 'fuelEvents', eventId),
   )
 }
 

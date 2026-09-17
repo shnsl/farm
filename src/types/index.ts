@@ -121,6 +121,21 @@ export interface HarvestEvent {
   createdAt: string
 }
 
+export interface FuelEvent {
+  id: string
+  /** Yakıt alım zamanı */
+  purchasedAt: string
+  /** Litre */
+  liters: number
+  /** Birim fiyat (₺/lt) */
+  unitPrice: number
+  /** Toplam tutar (lt × birim fiyat) */
+  totalCost: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
 export interface FertilizeEvent {
   id: string
   /** Gübreleme tarihi */

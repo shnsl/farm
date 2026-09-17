@@ -8,30 +8,36 @@ import {
 import { CollapseSection } from '../../components/CollapseSection'
 import {
   HeadingIcon,
-  IconCompare,
+  IconChart,
+  IconFuel,
+  IconFurrows,
   IconHarvest,
   IconList,
   IconPlow,
-  IconTree,
-  SectionTitle,
 } from '../../components/Icons'
 import {
   buildPlowStatPeriods,
+  createFuelEvent,
+  createFuelSchema,
   createHarvestEvent,
   createHarvestSchema,
   createPlowEvent,
   createPlowSchema,
+  deleteFuelEvent,
   deleteHarvestEvent,
   deletePlowEvent,
+  fuelTotalCost,
   PLOW_DIRECTION_LABELS,
   harvestProductValue,
+  subscribeFuelEvents,
   subscribeHarvestEvents,
   subscribePlowEvents,
+  updateFuelEvent,
   updateHarvestEvent,
 } from './api'
 import { YearlyHarvestChart } from './YearlyHarvestChart'
 import { confirmDelete } from '../../lib/confirmDelete'
-import type { HarvestEvent, PlowDirection, PlowEvent } from '../../types'
+import type { FuelEvent, HarvestEvent, PlowDirection, PlowEvent } from '../../types'
 
 interface FieldPlowPanelProps {
   farmId: string
@@ -92,6 +98,7 @@ export function FieldPlowPanel({
 }: FieldPlowPanelProps) {
   const [plows, setPlows] = useState<PlowEvent[]>([])
   const [harvests, setHarvests] = useState<HarvestEvent[]>([])
+  const [fuels, setFuels] = useState<FuelEvent[]>([])
   const [plowDate, setPlowDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   )
@@ -107,6 +114,12 @@ export function FieldPlowPanel({
   const [estimatedKg, setEstimatedKg] = useState('')
   const [avgPricePerKg, setAvgPricePerKg] = useState('')
   const [harvestNotes, setHarvestNotes] = useState('')
+  const [fuelPurchasedAt, setFuelPurchasedAt] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  )
+  const [fuelLiters, setFuelLiters] = useState(0)
+  const [fuelUnitPrice, setFuelUnitPrice] = useState(0)
+  const [fuelNotes, setFuelNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -119,8 +132,14 @@ export function FieldPlowPanel({
   const [editKg, setEditKg] = useState('')
   const [editAvgPrice, setEditAvgPrice] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editingFuelId, setEditingFuelId] = useState<string | null>(null)
+  const [editFuelPurchasedAt, setEditFuelPurchasedAt] = useState('')
+  const [editFuelLiters, setEditFuelLiters] = useState(0)
+  const [editFuelUnitPrice, setEditFuelUnitPrice] = useState(0)
+  const [editFuelNotes, setEditFuelNotes] = useState('')
   const [plowModalOpen, setPlowModalOpen] = useState(false)
   const [harvestModalOpen, setHarvestModalOpen] = useState(false)
+  const [fuelModalOpen, setFuelModalOpen] = useState(false)
   const [chartModalOpen, setChartModalOpen] = useState(false)
 
   useEffect(() => {
@@ -136,9 +155,16 @@ export function FieldPlowPanel({
       setHarvests,
       (err) => setError(err.message),
     )
+    const unsubFuel = subscribeFuelEvents(
+      farmId,
+      fieldId,
+      setFuels,
+      (err) => setError(err.message),
+    )
     return () => {
       unsubPlow()
       unsubHarvest()
+      unsubFuel()
     }
   }, [farmId, fieldId])
 
@@ -178,6 +204,20 @@ export function FieldPlowPanel({
         avgPricePerKg: editAvgPrice === '' ? undefined : Number(editAvgPrice),
       }),
     [editKg, editAvgPrice],
+  )
+
+  const fuelCostPreview = useMemo(
+    () => fuelTotalCost({ liters: fuelLiters, unitPrice: fuelUnitPrice }),
+    [fuelLiters, fuelUnitPrice],
+  )
+
+  const editFuelCostPreview = useMemo(
+    () =>
+      fuelTotalCost({
+        liters: editFuelLiters,
+        unitPrice: editFuelUnitPrice,
+      }),
+    [editFuelLiters, editFuelUnitPrice],
   )
 
   function startEditHarvest(h: HarvestEvent) {
@@ -292,6 +332,69 @@ export function FieldPlowPanel({
     }
   }
 
+  async function onAddFuel(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setInfo(null)
+    const parsed = createFuelSchema.safeParse({
+      purchasedAt: fuelPurchasedAt,
+      liters: fuelLiters,
+      unitPrice: fuelUnitPrice,
+      notes: fuelNotes,
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
+      return
+    }
+    setSaving(true)
+    try {
+      await createFuelEvent(farmId, fieldId, parsed.data, userId)
+      setFuelLiters(0)
+      setFuelUnitPrice(0)
+      setFuelNotes('')
+      setInfo('Yakıt kaydı eklendi.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Yakıt eklenemedi')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startFuelEdit(f: FuelEvent) {
+    setEditingFuelId(f.id)
+    setEditFuelPurchasedAt(f.purchasedAt.slice(0, 10))
+    setEditFuelLiters(f.liters)
+    setEditFuelUnitPrice(f.unitPrice)
+    setEditFuelNotes(f.notes ?? '')
+  }
+
+  async function onSaveFuelEdit(event: FormEvent) {
+    event.preventDefault()
+    if (!editingFuelId) return
+    setError(null)
+    setInfo(null)
+    const parsed = createFuelSchema.safeParse({
+      purchasedAt: editFuelPurchasedAt,
+      liters: editFuelLiters,
+      unitPrice: editFuelUnitPrice,
+      notes: editFuelNotes,
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
+      return
+    }
+    setSaving(true)
+    try {
+      await updateFuelEvent(farmId, fieldId, editingFuelId, parsed.data)
+      setEditingFuelId(null)
+      setInfo('Yakıt kaydı güncellendi.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Yakıt güncellenemedi')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function renderPlowItem(p: PlowEvent) {
     return (
       <li key={p.id}>
@@ -362,12 +465,117 @@ export function FieldPlowPanel({
     )
   }
 
-  return (
-    <section className="panel stack">
-      <SectionTitle icon={<IconTree />} tone="green">
-        Sürüm ve Hasat
-      </SectionTitle>
+  function renderFuelItem(f: FuelEvent) {
+    if (editingFuelId === f.id) {
+      return (
+        <li key={f.id} className="fertilize-edit-item">
+          <form className="form-grid" onSubmit={onSaveFuelEdit}>
+            <label>
+              Yakıt alım zamanı
+              <input
+                type="date"
+                value={editFuelPurchasedAt}
+                onChange={(e) => setEditFuelPurchasedAt(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Litre (lt)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={editFuelLiters}
+                onChange={(e) => setEditFuelLiters(Number(e.target.value))}
+                required
+              />
+            </label>
+            <label>
+              Birim fiyat (₺/lt)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={editFuelUnitPrice}
+                onChange={(e) => setEditFuelUnitPrice(Number(e.target.value))}
+                required
+              />
+            </label>
+            <p className="muted small">
+              Toplam: {formatMoney(editFuelCostPreview)}
+            </p>
+            <label className="span-2">
+              Not
+              <input
+                value={editFuelNotes}
+                onChange={(e) => setEditFuelNotes(e.target.value)}
+                placeholder="Veri girmek için dokunun.."
+              />
+            </label>
+            <div className="bulk-actions span-2">
+              <button className="btn primary" type="submit" disabled={saving}>
+                Kaydet
+              </button>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => setEditingFuelId(null)}
+              >
+                İptal
+              </button>
+            </div>
+          </form>
+        </li>
+      )
+    }
 
+    return (
+      <li key={f.id}>
+        <span>
+          {f.purchasedAt.slice(0, 10)} · {formatMoney(f.liters)} lt ·{' '}
+          {formatMoney(f.unitPrice)} ₺/lt · toplam {formatMoney(f.totalCost)}
+          {f.notes ? ` · ${f.notes}` : ''}
+        </span>
+        <div className="bulk-actions">
+          <button
+            type="button"
+            className="btn ghost btn-compact"
+            disabled={saving}
+            onClick={() => startFuelEdit(f)}
+          >
+            Düzenle
+          </button>
+          <button
+            type="button"
+            className="btn ghost btn-compact"
+            disabled={saving}
+            onClick={() => {
+              if (
+                !confirmDelete(
+                  'Bu Yakıt kaydı silinsin mi? Bu işlem geri alınamaz.',
+                )
+              ) {
+                return
+              }
+              void deleteFuelEvent(farmId, fieldId, f.id).catch((err) =>
+                setError(err instanceof Error ? err.message : 'Silinemedi'),
+              )
+            }}
+          >
+            Sil
+          </button>
+        </div>
+      </li>
+    )
+  }
+
+  return (
+    <CollapseSection
+      title="Sürüm ve Hasat"
+      icon={<IconPlow />}
+      tone="amber"
+      bodyClassName="stack"
+    >
       {error && (
         <p className="error" role="alert">
           {error}
@@ -393,7 +601,7 @@ export function FieldPlowPanel({
         ))}
       </div>
 
-      <CollapseSection title="Sürüm Kaydı" icon={<IconPlow />} tone="amber">
+      <CollapseSection title="Sürüm Kaydı" icon={<IconFurrows />} tone="olive">
         <form className="form-grid" onSubmit={onAddPlow}>
           <label>
             Tarih
@@ -524,10 +732,60 @@ export function FieldPlowPanel({
         </form>
       </CollapseSection>
 
+      <CollapseSection title="Yakıt" icon={<IconFuel />} tone="rose">
+        <form className="form-grid" onSubmit={onAddFuel}>
+          <label>
+            Yakıt alım zamanı
+            <input
+              type="date"
+              value={fuelPurchasedAt}
+              onChange={(e) => setFuelPurchasedAt(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Litre (lt)
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={fuelLiters}
+              onChange={(e) => setFuelLiters(Number(e.target.value))}
+              required
+            />
+          </label>
+          <label>
+            Birim fiyat (₺/lt)
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={fuelUnitPrice}
+              onChange={(e) => setFuelUnitPrice(Number(e.target.value))}
+              required
+            />
+          </label>
+          <p className="muted small">
+            Toplam tutar: {formatMoney(fuelCostPreview)}
+          </p>
+          <label className="span-2">
+            Not
+            <input
+              value={fuelNotes}
+              onChange={(e) => setFuelNotes(e.target.value)}
+              placeholder="Veri girmek için dokunun.."
+            />
+          </label>
+          <button className="btn primary" type="submit" disabled={saving}>
+            {saving ? 'Kaydediliyor…' : 'Yakıt ekle'}
+          </button>
+        </form>
+      </CollapseSection>
+
       {harvestByYear.length > 0 && (
         <CollapseSection
           title="Hasat İstatistikleri"
-          icon={<IconCompare />}
+          icon={<IconChart />}
           tone="sky"
         >
           <div className="table-wrap">
@@ -721,7 +979,7 @@ export function FieldPlowPanel({
             }
           >
             <span className="section-title-with-icon">
-              <HeadingIcon tone="amber">
+              <HeadingIcon tone="olive">
                 <IconList />
               </HeadingIcon>
               <span>
@@ -780,6 +1038,43 @@ export function FieldPlowPanel({
             </ul>
           )}
         </div>
+        <div>
+          <button
+            type="button"
+            className={`section-title-button${fuels.length > PREVIEW_LIMIT ? ' is-clickable' : ''}`}
+            onClick={() => {
+              if (fuels.length > PREVIEW_LIMIT) setFuelModalOpen(true)
+            }}
+            disabled={fuels.length <= PREVIEW_LIMIT}
+            aria-label={
+              fuels.length > PREVIEW_LIMIT
+                ? 'Eski Yakıt kayıtlarını aç'
+                : 'Yakıtlar'
+            }
+          >
+            <span className="section-title-with-icon">
+              <HeadingIcon tone="rose">
+                <IconFuel />
+              </HeadingIcon>
+              <span>
+                Yakıtlar
+                {fuels.length > PREVIEW_LIMIT && (
+                  <span className="muted small title-more-hint">
+                    {' '}
+                    · eski kayıtlar
+                  </span>
+                )}
+              </span>
+            </span>
+          </button>
+          {fuels.length === 0 ? (
+            <p className="muted small">Henüz Yakıt yok.</p>
+          ) : (
+            <ul className="event-list event-list-preview">
+              {fuels.slice(0, PREVIEW_LIMIT).map(renderFuelItem)}
+            </ul>
+          )}
+        </div>
       </div>
 
       {chartModalOpen && (
@@ -806,6 +1101,14 @@ export function FieldPlowPanel({
           </ul>
         </Modal>
       )}
-    </section>
+
+      {fuelModalOpen && (
+        <Modal title="Eski Yakıtlar" onClose={() => setFuelModalOpen(false)}>
+          <ul className="event-list event-list-modal">
+            {fuels.slice(PREVIEW_LIMIT).map(renderFuelItem)}
+          </ul>
+        </Modal>
+      )}
+    </CollapseSection>
   )
 }

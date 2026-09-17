@@ -7,8 +7,9 @@ import {
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import {
-  IconCompare,
-  IconList,
+  IconBranch,
+  IconGraph,
+  IconHistory,
   IconPrune,
   SectionTitle,
 } from '../../components/Icons'
@@ -196,11 +197,12 @@ export function FieldPrunePanel({
   }
 
   return (
-    <section className="panel stack">
-      <SectionTitle icon={<IconPrune />} tone="violet">
-        Budama
-      </SectionTitle>
-
+    <CollapseSection
+      title="Budama"
+      icon={<IconPrune />}
+      tone="violet"
+      bodyClassName="stack"
+    >
       {error && (
         <p className="error" role="alert">
           {error}
@@ -232,7 +234,7 @@ export function FieldPrunePanel({
         )}
       </div>
 
-      <CollapseSection title="Budama Kaydı" icon={<IconPrune />} tone="violet">
+      <CollapseSection title="Budama Kaydı" icon={<IconBranch />} tone="rose">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Budama tarihi
@@ -312,7 +314,7 @@ export function FieldPrunePanel({
       {byYear.length > 0 && (
         <CollapseSection
           title="Budama Kıyası (Yıllara Göre)"
-          icon={<IconCompare />}
+          icon={<IconGraph />}
           tone="sky"
         >
           <div className="bulk-actions" style={{ marginBottom: '0.65rem' }}>
@@ -362,7 +364,7 @@ export function FieldPrunePanel({
       )}
 
       <div>
-        <SectionTitle as="h3" icon={<IconList />} tone="olive">
+        <SectionTitle as="h3" icon={<IconHistory />} tone="olive">
           Budama Kayıtları
         </SectionTitle>
         {events.length === 0 ? (
@@ -525,6 +527,6 @@ export function FieldPrunePanel({
           <YearlyPruneChart events={events} />
         </Modal>
       )}
-    </section>
+    </CollapseSection>
   )
 }

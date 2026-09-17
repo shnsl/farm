@@ -146,7 +146,7 @@ export function FieldMapImagePanel({
   }
 
   return (
-    <section className="panel stack field-map-panel">
+    <div className="stack field-map-panel">
       <p className="muted small">
         Tarlanın uydu / fotoğraf görüntüsünü JPEG veya PNG olarak yükle.
         Fotoğrafları kuzey üstte olacak şekilde çek.
@@ -264,6 +264,6 @@ export function FieldMapImagePanel({
       )}
 
       {error && <p className="error">{error}</p>}
-    </section>
+    </div>
   )
 }

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AccentProvider } from './lib/accent'
 import { AuthProvider } from './lib/auth'
 import { FontProvider } from './lib/font'
 import { ThemeProvider } from './lib/theme'
@@ -16,25 +17,27 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <FontProvider>
-        <AuthProvider>
-          <BrowserRouter basename={basename}>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppLayout />}>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/fields/:fieldId" element={<FieldDetailPage />} />
-                  <Route path="/search" element={<SearchPage />} />
-                  <Route path="/stats" element={<StatsPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+      <AccentProvider>
+        <FontProvider>
+          <AuthProvider>
+            <BrowserRouter basename={basename}>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppLayout />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/fields/:fieldId" element={<FieldDetailPage />} />
+                    <Route path="/search" element={<SearchPage />} />
+                    <Route path="/stats" element={<StatsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
                 </Route>
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
-      </FontProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </AuthProvider>
+        </FontProvider>
+      </AccentProvider>
     </ThemeProvider>
   )
 }

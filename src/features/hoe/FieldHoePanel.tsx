@@ -7,9 +7,10 @@ import {
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import {
-  IconCompare,
   IconHoe,
-  IconList,
+  IconNotebook,
+  IconPie,
+  IconSoil,
   SectionTitle,
 } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
@@ -191,11 +192,12 @@ export function FieldHoePanel({
   }
 
   return (
-    <section className="panel stack">
-      <SectionTitle icon={<IconHoe />} tone="amber">
-        Çapalama
-      </SectionTitle>
-
+    <CollapseSection
+      title="Çapalama"
+      icon={<IconHoe />}
+      tone="amber"
+      bodyClassName="stack"
+    >
       {error && (
         <p className="error" role="alert">
           {error}
@@ -220,7 +222,7 @@ export function FieldHoePanel({
         )}
       </div>
 
-      <CollapseSection title="Çapalama Kaydı" icon={<IconHoe />} tone="amber">
+      <CollapseSection title="Çapalama Kaydı" icon={<IconSoil />} tone="olive">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Çapalama tarihi
@@ -294,7 +296,7 @@ export function FieldHoePanel({
       {byYear.length > 0 && (
         <CollapseSection
           title="Çapalama Kıyası (Yıllara Göre)"
-          icon={<IconCompare />}
+          icon={<IconPie />}
           tone="sky"
         >
           <div className="bulk-actions" style={{ marginBottom: '0.65rem' }}>
@@ -342,7 +344,7 @@ export function FieldHoePanel({
       )}
 
       <div>
-        <SectionTitle as="h3" icon={<IconList />} tone="olive">
+        <SectionTitle as="h3" icon={<IconNotebook />} tone="olive">
           Çapalama Kayıtları
         </SectionTitle>
         {events.length === 0 ? (
@@ -489,6 +491,6 @@ export function FieldHoePanel({
           <YearlyHoeChart events={events} />
         </Modal>
       )}
-    </section>
+    </CollapseSection>
   )
 }

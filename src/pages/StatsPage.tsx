@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { CollapseSection } from '../components/CollapseSection'
 import {
+  IconArea,
   IconCompare,
   IconFields,
-  IconLeaf,
   IconTree,
+  IconVariety,
+  IconWallet,
   PageTitle,
   SectionTitle,
 } from '../components/Icons'
@@ -90,7 +93,7 @@ export function StatsPage() {
               <p className="muted small">Kayıtlı tarla</p>
             </div>
             <div className="panel stats-summary-card">
-              <SectionTitle as="h3" icon={<IconFields />} tone="olive">
+              <SectionTitle as="h3" icon={<IconArea />} tone="olive">
                 Dönüm
               </SectionTitle>
               <p className="stats-summary-value">
@@ -107,10 +110,12 @@ export function StatsPage() {
             </div>
           </section>
 
-          <section className="panel stack">
-            <SectionTitle icon={<IconTree />} tone="green">
-              Çeşitlere Göre Ağaç
-            </SectionTitle>
+          <CollapseSection
+            title="Çeşitlere Göre Ağaç"
+            icon={<IconVariety />}
+            tone="green"
+            bodyClassName="stack"
+          >
             {stats.bySpecies.length === 0 ? (
               <p className="muted small">Henüz aktif ağaç yok.</p>
             ) : (
@@ -155,14 +160,16 @@ export function StatsPage() {
                 </table>
               </div>
             )}
-          </section>
+          </CollapseSection>
 
-          <section className="panel stack">
-            <SectionTitle icon={<IconLeaf />} tone="amber">
-              Yıllara Göre Harcama
-            </SectionTitle>
+          <CollapseSection
+            title="Yıllara Göre Harcama"
+            icon={<IconWallet />}
+            tone="amber"
+            bodyClassName="stack"
+          >
             <p className="muted small">
-              Gübreleme + Budama + Hasat + Çapalama harcamaları.
+              Gübreleme + Budama + Hasat + Çapalama + Yakıt harcamaları.
             </p>
             {stats.byYear.length === 0 ? (
               <p className="muted small">Henüz harcama kaydı yok.</p>
@@ -195,6 +202,7 @@ export function StatsPage() {
                         <th>Budama</th>
                         <th>Hasat</th>
                         <th>Çapalama</th>
+                        <th>Yakıt</th>
                         <th>Toplam</th>
                       </tr>
                     </thead>
@@ -206,6 +214,7 @@ export function StatsPage() {
                           <td>{formatMoney(row.prune)}</td>
                           <td>{formatMoney(row.harvest)}</td>
                           <td>{formatMoney(row.hoe)}</td>
+                          <td>{formatMoney(row.fuel)}</td>
                           <td>
                             <strong>{formatMoney(row.total)}</strong>
                           </td>
@@ -216,7 +225,7 @@ export function StatsPage() {
                 </div>
               </>
             )}
-          </section>
+          </CollapseSection>
         </>
       ) : null}
     </div>

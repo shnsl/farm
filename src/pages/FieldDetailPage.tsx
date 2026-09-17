@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
+  IconCell,
   IconFields,
   IconGrid,
-  IconLeaf,
+  IconInfo,
+  IconMap,
   IconPencil,
-  IconTree,
+  IconSelect,
   PageTitle,
   SectionTitle,
 } from '../components/Icons'
@@ -736,10 +738,13 @@ export function FieldDetailPage() {
       )}
 
       {multiSelect && (
-        <section className="panel stack">
-          <SectionTitle icon={<IconGrid />} tone="sky">
-            Seçime bilgi uygula · {multiSelected.size} hücre
-          </SectionTitle>
+        <CollapseSection
+          title={`Seçime bilgi uygula · ${multiSelected.size} hücre`}
+          icon={<IconSelect />}
+          tone="sky"
+          defaultOpen
+          bodyClassName="stack"
+        >
           <p className="muted small">
             {multiFilled.length} dolu · {multiEmpty.length} boş seçili. Grid
             üzerindeki araç çubuğundan seçimi değiştir.
@@ -918,14 +923,16 @@ export function FieldDetailPage() {
               </button>
             </form>
           )}
-        </section>
+        </CollapseSection>
       )}
 
       {!multiSelect && (
-        <section className="panel">
-          <SectionTitle icon={<IconLeaf />} tone="olive">
-            Tarla Bilgileri
-          </SectionTitle>
+        <CollapseSection
+          title="Tarla Bilgileri"
+          icon={<IconInfo />}
+          tone="olive"
+          bodyClassName="stack"
+        >
           {!editingBulkSpecies ? (
             <div className="info-summary stack">
               <dl className="summary-list">
@@ -1078,109 +1085,200 @@ export function FieldDetailPage() {
               </div>
             </form>
           )}
-        </section>
+        </CollapseSection>
       )}
 
-      <div className="field-layout">
-        <TreeGrid
-          rowCount={field.rowCount}
-          colCount={field.colCount}
-          treeByCell={treeByCell}
-          selectedCell={selectedCell}
-          onSelectCell={selectCell}
-          multiSelect={multiSelect}
-          multiSelected={multiSelected}
-          onToggleMulti={toggleMulti}
-          onEnableMulti={enableMultiSelect}
-          onDisableMulti={disableMultiSelect}
-          activeTreeCount={activeTrees.length}
-          onSelectAllTrees={selectAllTrees}
-          onSelectAllCells={selectAllCells}
-          onClearMulti={clearMulti}
-        />
+      <CollapseSection
+        title="Tarla İçeriği"
+        icon={<IconGrid />}
+        tone="green"
+        className={multiSelect ? 'multi-mode' : undefined}
+      >
+        <div className="field-layout">
+          <TreeGrid
+            rowCount={field.rowCount}
+            colCount={field.colCount}
+            treeByCell={treeByCell}
+            selectedCell={selectedCell}
+            onSelectCell={selectCell}
+            multiSelect={multiSelect}
+            multiSelected={multiSelected}
+            onToggleMulti={toggleMulti}
+            onEnableMulti={enableMultiSelect}
+            onDisableMulti={disableMultiSelect}
+            activeTreeCount={activeTrees.length}
+            onSelectAllTrees={selectAllTrees}
+            onSelectAllCells={selectAllCells}
+            onClearMulti={clearMulti}
+          />
 
-        <aside className="panel sticky-panel">
-          {multiSelect ? (
-            <>
-              <SectionTitle icon={<IconGrid />} tone="sky">
-                Seçim özeti
-              </SectionTitle>
-              <p className="muted">
-                {multiSelected.size === 0
-                  ? 'Grid’den dokunarak seçim yap.'
-                  : `${multiFilled.length} ağaç güncellenecek, ${multiEmpty.length} boş hücreye ağaç eklenebilir.`}
-              </p>
-            </>
-          ) : (
-            <>
-              <SectionTitle icon={<IconTree />} tone="green">
-                Hücre
-              </SectionTitle>
-              {!selectedCell ? (
+          <aside className="cell-panel sticky-panel">
+            {multiSelect ? (
+              <>
+                <SectionTitle icon={<IconSelect />} tone="sky">
+                  Seçim özeti
+                </SectionTitle>
                 <p className="muted">
-                  Tek hücre için dokun. Çoklu düzenleme için “Çoklu seçim”e geç.
+                  {multiSelected.size === 0
+                    ? 'Grid’den dokunarak seçim yap.'
+                    : `${multiFilled.length} ağaç güncellenecek, ${multiEmpty.length} boş hücreye ağaç eklenebilir.`}
                 </p>
-              ) : selectedTree ? (
-                editingTree ? (
-                  <form className="stack" onSubmit={onSaveTree}>
+              </>
+            ) : (
+              <>
+                <SectionTitle icon={<IconCell />} tone="green">
+                  Hücre
+                </SectionTitle>
+                {!selectedCell ? (
+                  <p className="muted">
+                    Tek hücre için dokun. Çoklu düzenleme için “Çoklu seçim”e
+                    geç.
+                  </p>
+                ) : selectedTree ? (
+                  editingTree ? (
+                    <form className="stack" onSubmit={onSaveTree}>
+                      <p>
+                        Seçili hücre: <strong>{selectedTree.cell}</strong>
+                      </p>
+                      <label>
+                        Çeşit
+                        <input
+                          value={editSpecies}
+                          onChange={(e) => setEditSpecies(e.target.value)}
+                          placeholder="Veri girmek için dokunun.."
+                        />
+                      </label>
+                      <label>
+                        Etiket / kod
+                        <input
+                          value={editLabel}
+                          onChange={(e) => setEditLabel(e.target.value)}
+                          placeholder="Veri girmek için dokunun.."
+                        />
+                      </label>
+                      <label>
+                        Dikim tarihi
+                        <input
+                          type="date"
+                          value={editPlantedAt}
+                          onChange={(e) => setEditPlantedAt(e.target.value)}
+                        />
+                      </label>
+                      {formatTreeAge(editPlantedAt) && (
+                        <p className="muted small">
+                          Yaş: <strong>{formatTreeAge(editPlantedAt)}</strong>
+                        </p>
+                      )}
+                      <label>
+                        Sağlık
+                        <select
+                          value={editHealth}
+                          onChange={(e) =>
+                            setEditHealth(
+                              (e.target.value || '') as TreeHealth | '',
+                            )
+                          }
+                        >
+                          <option value="">Belirtilmedi</option>
+                          {(
+                            Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]
+                          ).map((key) => (
+                            <option key={key} value={key}>
+                              {TREE_HEALTH_LABELS[key]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Notlar
+                        <textarea
+                          rows={4}
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="Veri girmek için dokunun.."
+                        />
+                      </label>
+                      <button
+                        className="btn primary"
+                        type="submit"
+                        disabled={saving}
+                      >
+                        {saving ? 'Kaydediliyor…' : 'Bilgileri kaydet'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() => setEditingTree(false)}
+                      >
+                        İptal
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        disabled={saving}
+                        onClick={() => void onRemoveTree()}
+                      >
+                        Ağacı kaldır
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="info-summary stack">
+                      <p>
+                        Seçili hücre: <strong>{selectedTree.cell}</strong>
+                      </p>
+                      <dl className="summary-list">
+                        <dt>Çeşit</dt>
+                        <dd>{selectedTree.species || '—'}</dd>
+                        <dt>Etiket</dt>
+                        <dd>{selectedTree.label || '—'}</dd>
+                        <dt>Dikim</dt>
+                        <dd>{selectedTree.plantedAt || '—'}</dd>
+                        <dt>Yaş</dt>
+                        <dd>{formatTreeAge(selectedTree.plantedAt) || '—'}</dd>
+                        <dt>Sağlık</dt>
+                        <dd>
+                          {selectedTree.health
+                            ? TREE_HEALTH_LABELS[selectedTree.health]
+                            : '—'}
+                        </dd>
+                        <dt>Not</dt>
+                        <dd>{selectedTree.notes || '—'}</dd>
+                      </dl>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        onClick={() => setEditingTree(true)}
+                      >
+                        Bilgileri düzenle
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        disabled={saving}
+                        onClick={() => void onRemoveTree()}
+                      >
+                        Ağacı kaldır
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <form className="stack" onSubmit={onAddTree}>
                     <p>
-                      Seçili hücre: <strong>{selectedTree.cell}</strong>
+                      Seçili hücre: <strong>{selectedCell}</strong>
                     </p>
                     <label>
-                      Çeşit
+                      Tür / çeşit
                       <input
-                        value={editSpecies}
-                        onChange={(e) => setEditSpecies(e.target.value)}
+                        value={species}
+                        onChange={(e) => setSpecies(e.target.value)}
                         placeholder="Veri girmek için dokunun.."
                       />
                     </label>
                     <label>
-                      Etiket / kod
+                      Not
                       <input
-                        value={editLabel}
-                        onChange={(e) => setEditLabel(e.target.value)}
-                        placeholder="Veri girmek için dokunun.."
-                      />
-                    </label>
-                    <label>
-                      Dikim tarihi
-                      <input
-                        type="date"
-                        value={editPlantedAt}
-                        onChange={(e) => setEditPlantedAt(e.target.value)}
-                      />
-                    </label>
-                    {formatTreeAge(editPlantedAt) && (
-                      <p className="muted small">
-                        Yaş: <strong>{formatTreeAge(editPlantedAt)}</strong>
-                      </p>
-                    )}
-                    <label>
-                      Sağlık
-                      <select
-                        value={editHealth}
-                        onChange={(e) =>
-                          setEditHealth(
-                            (e.target.value || '') as TreeHealth | '',
-                          )
-                        }
-                      >
-                        <option value="">Belirtilmedi</option>
-                        {(
-                          Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]
-                        ).map((key) => (
-                          <option key={key} value={key}>
-                            {TREE_HEALTH_LABELS[key]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Notlar
-                      <textarea
-                        rows={4}
-                        value={editNotes}
-                        onChange={(e) => setEditNotes(e.target.value)}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
                         placeholder="Veri girmek için dokunun.."
                       />
                     </label>
@@ -1189,97 +1287,18 @@ export function FieldDetailPage() {
                       type="submit"
                       disabled={saving}
                     >
-                      {saving ? 'Kaydediliyor…' : 'Bilgileri kaydet'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => setEditingTree(false)}
-                    >
-                      İptal
-                    </button>
-                    <button
-                      type="button"
-                      className="btn danger"
-                      disabled={saving}
-                      onClick={() => void onRemoveTree()}
-                    >
-                      Ağacı kaldır
+                      {saving ? 'Kaydediliyor…' : 'Ağaç ekle'}
                     </button>
                   </form>
-                ) : (
-                  <div className="info-summary stack">
-                    <p>
-                      Seçili hücre: <strong>{selectedTree.cell}</strong>
-                    </p>
-                    <dl className="summary-list">
-                      <dt>Çeşit</dt>
-                      <dd>{selectedTree.species || '—'}</dd>
-                      <dt>Etiket</dt>
-                      <dd>{selectedTree.label || '—'}</dd>
-                      <dt>Dikim</dt>
-                      <dd>{selectedTree.plantedAt || '—'}</dd>
-                      <dt>Yaş</dt>
-                      <dd>{formatTreeAge(selectedTree.plantedAt) || '—'}</dd>
-                      <dt>Sağlık</dt>
-                      <dd>
-                        {selectedTree.health
-                          ? TREE_HEALTH_LABELS[selectedTree.health]
-                          : '—'}
-                      </dd>
-                      <dt>Not</dt>
-                      <dd>{selectedTree.notes || '—'}</dd>
-                    </dl>
-                    <button
-                      type="button"
-                      className="btn primary"
-                      onClick={() => setEditingTree(true)}
-                    >
-                      Bilgileri düzenle
-                    </button>
-                    <button
-                      type="button"
-                      className="btn danger"
-                      disabled={saving}
-                      onClick={() => void onRemoveTree()}
-                    >
-                      Ağacı kaldır
-                    </button>
-                  </div>
-                )
-              ) : (
-                <form className="stack" onSubmit={onAddTree}>
-                  <p>
-                    Seçili hücre: <strong>{selectedCell}</strong>
-                  </p>
-                  <label>
-                    Tür / çeşit
-                    <input
-                      value={species}
-                      onChange={(e) => setSpecies(e.target.value)}
-                      placeholder="Veri girmek için dokunun.."
-                    />
-                  </label>
-                  <label>
-                    Not
-                    <input
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Veri girmek için dokunun.."
-                    />
-                  </label>
-                  <button className="btn primary" type="submit" disabled={saving}>
-                    {saving ? 'Kaydediliyor…' : 'Ağaç ekle'}
-                  </button>
-                </form>
-              )}
-            </>
-          )}
-        </aside>
-      </div>
+                )}
+              </>
+            )}
+          </aside>
+        </div>
+      </CollapseSection>
 
       {farmId && (
-        <CollapseSection title="Tarla Haritası" icon={<IconFields />} tone="teal">
+        <CollapseSection title="Tarla Haritası" icon={<IconMap />} tone="teal">
           <FieldMapImagePanel
             farmId={farmId}
             fieldId={field.id}

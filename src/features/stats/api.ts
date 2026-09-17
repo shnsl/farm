@@ -14,6 +14,7 @@ export interface YearSpendStat {
   prune: number
   harvest: number
   hoe: number
+  fuel: number
   total: number
 }
 
@@ -33,7 +34,7 @@ function yearOf(doneAt: string): string | null {
 function addSpend(
   map: Map<string, YearSpendStat>,
   year: string,
-  key: 'fertilize' | 'prune' | 'harvest' | 'hoe',
+  key: 'fertilize' | 'prune' | 'harvest' | 'hoe' | 'fuel',
   amount: number,
 ) {
   if (!amount) return
@@ -43,6 +44,7 @@ function addSpend(
     prune: 0,
     harvest: 0,
     hoe: 0,
+    fuel: 0,
     total: 0,
   }
   row[key] += amount
@@ -66,7 +68,7 @@ export async function loadFarmStats(
 
   await Promise.all(
     fields.map(async (field) => {
-      const [treesSnap, fertSnap, pruneSnap, harvestSnap, hoeSnap] =
+      const [treesSnap, fertSnap, pruneSnap, harvestSnap, hoeSnap, fuelSnap] =
         await Promise.all([
           getDocs(
             query(
@@ -85,6 +87,9 @@ export async function loadFarmStats(
           ),
           getDocs(
             collection(db, 'farms', farmId, 'fields', field.id, 'hoeEvents'),
+          ),
+          getDocs(
+            collection(db, 'farms', farmId, 'fields', field.id, 'fuelEvents'),
           ),
         ])
 
@@ -132,6 +137,19 @@ export async function loadFarmStats(
         const year = yearOf(String(data.doneAt ?? ''))
         if (!year) continue
         addSpend(spendMap, year, 'hoe', Number(data.totalPaid ?? 0))
+      }
+
+      for (const d of fuelSnap.docs) {
+        const data = d.data()
+        const year = yearOf(String(data.purchasedAt ?? ''))
+        if (!year) continue
+        const liters = Number(data.liters ?? 0)
+        const unitPrice = Number(data.unitPrice ?? 0)
+        const total =
+          data.totalCost !== undefined && data.totalCost !== null
+            ? Number(data.totalCost)
+            : Number((liters * unitPrice).toFixed(2))
+        addSpend(spendMap, year, 'fuel', total)
       }
     }),
   )
