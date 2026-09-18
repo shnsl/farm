@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 
@@ -7,6 +7,20 @@ export function LoginPage() {
   const [pin, setPin] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const pinRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (loading || user) return
+    const input = pinRef.current
+    if (!input) return
+    // Oturum hazır olunca odakla → mobilde numerik klavye açılsın
+    const id = window.setTimeout(() => {
+      input.focus({ preventScroll: true })
+      // Bazı mobil tarayıcılarda ikinci odak denemesi klavyeyi tetikler
+      input.click()
+    }, 50)
+    return () => window.clearTimeout(id)
+  }, [loading, user])
 
   if (!loading && user) {
     return <Navigate to="/" replace />
@@ -52,10 +66,12 @@ export function LoginPage() {
           <label>
             Şifre
             <input
+              ref={pinRef}
               className="pin-input"
               type="password"
               inputMode="numeric"
-              autoComplete="current-password"
+              enterKeyHint="done"
+              autoComplete="one-time-code"
               pattern="\d{6}"
               maxLength={6}
               value={pin}
