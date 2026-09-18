@@ -377,12 +377,6 @@ html[data-theme='dark'] .heading-icon.tone-olive {
   font-size: 1.05rem;
 }
 
-.topbar-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 .top-search {
   flex: 1;
   min-width: 140px;
@@ -548,6 +542,43 @@ textarea:focus {
 .accent-picker-name {
   font-weight: 600;
   font-size: 0.92rem;
+}
+
+.theme-mode-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.theme-mode-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.theme-mode-option svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.theme-mode-option:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+}
+
+.theme-mode-option.is-selected {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent);
+  color: var(--brand-strong);
 }
 
 .field-summary-line {
@@ -1647,11 +1678,6 @@ code {
     max-width: none;
     width: 100%;
     flex: 1 0 100%;
-  }
-
-  .topbar-meta {
-    width: auto;
-    margin-left: auto;
   }
 
   .search-page-form {

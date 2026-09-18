@@ -450,6 +450,16 @@ export function IconMoon(props: IconProps) {
   )
 }
 
+export function IconLogout(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
+      <path d="M15 8l4 4-4 4" />
+      <path d="M10 12h9" />
+    </Svg>
+  )
+}
+
 export function IconList(props: IconProps) {
   return (
     <Svg {...props}>

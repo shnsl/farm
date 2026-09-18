@@ -4,9 +4,12 @@ import {
   IconCalendar,
   IconFont,
   IconLock,
+  IconLogout,
+  IconMoon,
   IconPalette,
   IconSettings,
   IconShield,
+  IconSun,
   PageTitle,
 } from '../components/Icons'
 import { careStandards } from '../config/careStandards'
@@ -16,9 +19,9 @@ import { useFont } from '../lib/font'
 import { useTheme } from '../lib/theme'
 
 export function SettingsPage() {
-  const { farmId, changePin } = useAuth()
+  const { farmId, changePin, logout } = useAuth()
   const { fontId, fonts, setFontId } = useFont()
-  const { theme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const { accentId, accents, setAccentId } = useAccent()
   const [currentPin, setCurrentPin] = useState('')
   const [nextPin, setNextPin] = useState('')
@@ -26,6 +29,7 @@ export function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   async function onChangePin(event: FormEvent) {
     event.preventDefault()
@@ -55,6 +59,15 @@ export function SettingsPage() {
     }
   }
 
+  async function onLogout() {
+    setLoggingOut(true)
+    try {
+      await logout()
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-header">
@@ -63,7 +76,7 @@ export function SettingsPage() {
             Ayarlar
           </PageTitle>
           <p className="muted">
-            Tema rengi, yazı tipi, PIN, standartlar ve güvenlik notları.
+            Görünüm, yazı tipi, PIN, standartlar ve oturum.
           </p>
         </div>
       </header>
@@ -75,6 +88,28 @@ export function SettingsPage() {
         defaultOpen
         bodyClassName="stack"
       >
+        <p className="muted small">Açık / koyu mod</p>
+        <div className="theme-mode-picker" role="group" aria-label="Açık koyu mod">
+          <button
+            type="button"
+            className={`theme-mode-option${theme === 'light' ? ' is-selected' : ''}`}
+            aria-pressed={theme === 'light'}
+            onClick={() => setTheme('light')}
+          >
+            <IconSun />
+            <span>Açık</span>
+          </button>
+          <button
+            type="button"
+            className={`theme-mode-option${theme === 'dark' ? ' is-selected' : ''}`}
+            aria-pressed={theme === 'dark'}
+            onClick={() => setTheme('dark')}
+          >
+            <IconMoon />
+            <span>Koyu</span>
+          </button>
+        </div>
+
         <p className="muted small">
           Uygulama vurgusu ve arka plan tonu. Açık / koyu moda göre otomatik
           uyumlanır. Seçim bu cihazda saklanır.
@@ -245,6 +280,25 @@ export function SettingsPage() {
             farm verisine erişmesine izin verir.
           </li>
         </ul>
+      </CollapseSection>
+
+      <CollapseSection
+        title="Oturum"
+        icon={<IconLogout />}
+        tone="rose"
+        bodyClassName="stack"
+      >
+        <p className="muted small">
+          Çıkış yapınca bu cihazda tekrar PIN istenir.
+        </p>
+        <button
+          type="button"
+          className="btn danger"
+          disabled={loggingOut}
+          onClick={() => void onLogout()}
+        >
+          {loggingOut ? 'Çıkılıyor…' : 'Çıkış yap'}
+        </button>
       </CollapseSection>
     </div>
   )
