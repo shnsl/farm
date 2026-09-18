@@ -6,8 +6,37 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2f5d3a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Tarlalardaki ağaçların bakımı ve takibi" />
     <title>Tarla Ağaç Takip</title>
+    <script>
+      // İlk boyamada durum çubuğu rengini saklı temaya yaklaştır
+      (function () {
+        try {
+          var accents = {
+            green: { light: '#2f5d3a', dark: '#6faf7d' },
+            teal: { light: '#0f6568', dark: '#4eb8bb' },
+            blue: { light: '#2a5085', dark: '#6b9fd4' },
+            amber: { light: '#8a5a1c', dark: '#d4a05c' },
+            rose: { light: '#8b3a4a', dark: '#d48494' },
+            violet: { light: '#5a3d7a', dark: '#a88cc8' },
+            olive: { light: '#5c6b2f', dark: '#a8b86a' },
+          }
+          var accent = localStorage.getItem('farm-accent') || 'green'
+          var theme = localStorage.getItem('farm-theme')
+          if (theme !== 'light' && theme !== 'dark') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          var pair = accents[accent] || accents.green
+          var color = pair[theme] || pair.light
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', color)
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

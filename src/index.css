@@ -173,6 +173,7 @@ input {
   align-items: center;
   gap: 1rem;
   padding: 0.9rem 1.25rem;
+  padding-top: calc(0.9rem + env(safe-area-inset-top, 0px));
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(8px);

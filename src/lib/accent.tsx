@@ -28,6 +28,34 @@ interface AccentContextValue {
 const STORAGE_KEY = 'farm-accent'
 const AccentContext = createContext<AccentContextValue | null>(null)
 
+function applyBrowserChromeColor(color: string) {
+  const head = document.head
+  let meta = head.querySelector(
+    'meta[name="theme-color"]:not([media])',
+  ) as HTMLMetaElement | null
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    head.appendChild(meta)
+  }
+  meta.content = color
+
+  // Tercih edilen renk şemasına bağlı sabit meta'lar çakışmasın
+  head
+    .querySelectorAll('meta[name="theme-color"][media]')
+    .forEach((el) => el.remove())
+
+  let tile = head.querySelector(
+    'meta[name="msapplication-TileColor"]',
+  ) as HTMLMetaElement | null
+  if (!tile) {
+    tile = document.createElement('meta')
+    tile.name = 'msapplication-TileColor'
+    head.appendChild(tile)
+  }
+  tile.content = color
+}
+
 function applyAccent(id: AccentId, mode: 'light' | 'dark') {
   const palette = getAccentPalette(id, mode)
   const root = document.documentElement
@@ -52,6 +80,8 @@ function applyAccent(id: AccentId, mode: 'light' | 'dark') {
     '--input-bg',
     mode === 'dark' ? palette.bg : '#ffffff',
   )
+  // Android / PWA durum çubuğu seçilen tema rengine uyumlanır
+  applyBrowserChromeColor(palette.brand)
 }
 
 function readStoredAccent(): AccentId {

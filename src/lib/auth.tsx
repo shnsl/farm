@@ -198,9 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Şifreyi kontrol et')
     }
 
+    // onAuthStateChanged oturumu kilitlemeden önce çalışmasın diye bayrağı önce koy
+    markSessionUnlocked()
     try {
       await signInWithEmailAndPassword(auth, FARM_AUTH_EMAIL, pin)
-      markSessionUnlocked()
     } catch (err) {
       const code = authErrorCode(err)
       const missingUser =
@@ -212,9 +213,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (missingUser && pin === DEFAULT_PIN) {
         try {
           await createUserWithEmailAndPassword(auth, FARM_AUTH_EMAIL, DEFAULT_PIN)
-          markSessionUnlocked()
           return
         } catch (createErr) {
+          clearSessionUnlock()
           const createCode = authErrorCode(createErr)
           if (createCode === 'auth/email-already-in-use') {
             throw new Error('Şifre hatalı')
@@ -222,6 +223,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw createErr
         }
       }
+
+      clearSessionUnlock()
 
       if (
         code === 'auth/wrong-password' ||
