@@ -363,6 +363,60 @@ html[data-theme='dark'] .heading-icon.tone-olive {
   box-shadow: var(--shadow);
 }
 
+.field-card.field-tone-bazinta {
+  background: #e8f3dc;
+  border-color: #9bb87a;
+}
+
+.field-card.field-tone-selmincik {
+  background: #e4eef8;
+  border-color: #7a9fc4;
+}
+
+.field-card.field-tone-cat {
+  background: #f7eadc;
+  border-color: #c49a6c;
+}
+
+.field-card.field-tone-buldum {
+  background: #e6f2f0;
+  border-color: #6fa39a;
+}
+
+.field-card.field-tone-dag {
+  background: #f3e8ef;
+  border-color: #b07a9a;
+}
+
+.field-card.field-tone-other {
+  background: var(--surface);
+}
+
+html[data-theme='dark'] .field-card.field-tone-bazinta {
+  background: #2a3828;
+  border-color: #6f8f55;
+}
+
+html[data-theme='dark'] .field-card.field-tone-selmincik {
+  background: #243344;
+  border-color: #6a8fb0;
+}
+
+html[data-theme='dark'] .field-card.field-tone-cat {
+  background: #3a2f24;
+  border-color: #b08958;
+}
+
+html[data-theme='dark'] .field-card.field-tone-buldum {
+  background: #243836;
+  border-color: #5f9a90;
+}
+
+html[data-theme='dark'] .field-card.field-tone-dag {
+  background: #3a2834;
+  border-color: #a07090;
+}
+
 .auth-brand-icon {
   margin-bottom: 0.35rem;
 }

@@ -15,6 +15,7 @@ import {
   deleteField,
   subscribeFields,
 } from '../features/fields/api'
+import { fieldColorClass, fieldColorOrder } from '../features/fields/fieldColor'
 import { FarmFuelPanel } from '../features/fuel/FarmFuelPanel'
 import { FarmPesticidePanel } from '../features/pesticide/FarmPesticidePanel'
 import { countActiveTreesByFields } from '../features/trees/api'
@@ -38,6 +39,8 @@ function nextSortMode(mode: FieldSortMode): FieldSortMode {
 function sortFields(list: Field[], mode: FieldSortMode): Field[] {
   const copy = [...list]
   copy.sort((a, b) => {
+    const colorCmp = fieldColorOrder(a.name) - fieldColorOrder(b.name)
+    if (colorCmp !== 0) return colorCmp
     if (mode === 0) return a.name.localeCompare(b.name, 'tr')
     if (mode === 1) return b.name.localeCompare(a.name, 'tr')
     const da = a.donum ?? 0
@@ -169,7 +172,10 @@ export function DashboardPage() {
       <ul className="field-list">
         {list.map((field) => (
           <li key={field.id} className="field-list-item">
-            <Link to={`/fields/${field.id}`} className="field-card">
+            <Link
+              to={`/fields/${field.id}`}
+              className={`field-card ${fieldColorClass(field.name)}`}
+            >
               <span className="field-card-icon">
                 <HeadingIcon tone="green">
                   <IconFields />
