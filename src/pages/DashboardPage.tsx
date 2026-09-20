@@ -78,10 +78,21 @@ export function DashboardPage() {
     )
   }, [farmId])
 
+  const fieldIdsKey = useMemo(
+    () => fields.map((f) => f.id).join('|'),
+    [fields],
+  )
+
   useEffect(() => {
     if (!farmId) return
     let cancelled = false
-    setCountsReady(false)
+
+    if (fields.length === 0) {
+      setTreeCounts({})
+      setCountsReady(true)
+      return
+    }
+
     void countActiveTreesByFields(farmId, fields)
       .then((counts) => {
         if (!cancelled) {
@@ -100,7 +111,9 @@ export function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [farmId, fields])
+    // fieldIdsKey: aynı tarla seti için tekrar yüklemeyi önler
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fields içerik referansı değil id seti
+  }, [farmId, fieldIdsKey])
 
   const { plantedFields, emptyFields } = useMemo(() => {
     const planted: Field[] = []

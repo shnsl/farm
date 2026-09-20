@@ -63,10 +63,7 @@ export async function loadFarmStats(
   const spendMap = new Map<string, YearSpendStat>()
   let totalTrees = 0
   let totalDonum = 0
-
-  for (const field of fields) {
-    totalDonum += field.donum ?? 0
-  }
+  let fieldCount = 0
 
   await Promise.all(
     fields.map(async (field) => {
@@ -92,13 +89,22 @@ export async function loadFarmStats(
           ),
         ])
 
+      let activeInField = 0
       for (const d of treesSnap.docs) {
         const data = d.data()
         if (String(data.status ?? 'active') !== 'active') continue
+        activeInField += 1
         totalTrees += 1
-        const species =
-          String(data.species ?? '').trim() || 'Belirtilmedi'
+        const species = String(data.species ?? '').trim()
+        // Boş çeşit adını istatistikten çıkar
+        if (!species) continue
         speciesMap.set(species, (speciesMap.get(species) ?? 0) + 1)
+      }
+
+      // Boş tarlaları tarla / dönüm sayımına alma
+      if (activeInField > 0) {
+        fieldCount += 1
+        totalDonum += field.donum ?? 0
       }
 
       for (const d of fertSnap.docs) {
@@ -178,7 +184,7 @@ export async function loadFarmStats(
   )
 
   return {
-    fieldCount: fields.length,
+    fieldCount,
     totalDonum,
     totalTrees,
     bySpecies,

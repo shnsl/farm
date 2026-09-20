@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatedNumber } from '../components/AnimatedNumber'
 import { CollapseSection } from '../components/CollapseSection'
 import {
@@ -35,17 +35,31 @@ function formatPct(value: number): string {
 export function StatsPage() {
   const { farmId } = useAuth()
   const [fields, setFields] = useState<Field[]>([])
+  const [fieldsReady, setFieldsReady] = useState(false)
   const [stats, setStats] = useState<FarmStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!farmId) return
-    return subscribeFields(farmId, setFields, (err) => setError(err.message))
+    setFieldsReady(false)
+    return subscribeFields(
+      farmId,
+      (next) => {
+        setFields(next)
+        setFieldsReady(true)
+      },
+      (err) => setError(err.message),
+    )
   }, [farmId])
 
+  const fieldIdsKey = useMemo(
+    () => fields.map((f) => f.id).join('|'),
+    [fields],
+  )
+
   useEffect(() => {
-    if (!farmId) return
+    if (!farmId || !fieldsReady) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -66,7 +80,8 @@ export function StatsPage() {
     return () => {
       cancelled = true
     }
-  }, [farmId, fields])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- aynı tarla setinde tekrar yükleme
+  }, [farmId, fieldsReady, fieldIdsKey])
 
   const maxSpend = Math.max(...(stats?.byYear.map((y) => y.total) ?? [0]), 1)
 
