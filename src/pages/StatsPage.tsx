@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatedNumber } from '../components/AnimatedNumber'
 import { CollapseSection } from '../components/CollapseSection'
 import {
   IconArea,
@@ -21,6 +22,14 @@ function formatMoney(value: number): string {
 
 function formatNum(value: number): string {
   return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+}
+
+function formatInt(value: number): string {
+  return Math.round(value).toLocaleString('tr-TR')
+}
+
+function formatPct(value: number): string {
+  return `%${value.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`
 }
 
 export function StatsPage() {
@@ -89,7 +98,9 @@ export function StatsPage() {
               <SectionTitle as="h3" icon={<IconFields />} tone="teal">
                 Tarla
               </SectionTitle>
-              <p className="stats-summary-value">{formatNum(stats.fieldCount)}</p>
+              <p className="stats-summary-value">
+                <AnimatedNumber value={stats.fieldCount} format={formatInt} />
+              </p>
               <p className="muted small">Kayıtlı tarla</p>
             </div>
             <div className="panel stats-summary-card">
@@ -97,7 +108,7 @@ export function StatsPage() {
                 Dönüm
               </SectionTitle>
               <p className="stats-summary-value">
-                {formatNum(stats.totalDonum)}
+                <AnimatedNumber value={stats.totalDonum} format={formatNum} />
               </p>
               <p className="muted small">Toplam alan</p>
             </div>
@@ -105,7 +116,9 @@ export function StatsPage() {
               <SectionTitle as="h3" icon={<IconTree />} tone="green">
                 Ağaç
               </SectionTitle>
-              <p className="stats-summary-value">{formatNum(stats.totalTrees)}</p>
+              <p className="stats-summary-value">
+                <AnimatedNumber value={stats.totalTrees} format={formatInt} />
+              </p>
               <p className="muted small">Aktif ağaç</p>
             </div>
           </section>
@@ -137,7 +150,12 @@ export function StatsPage() {
                       return (
                         <tr key={row.species}>
                           <td>{row.species}</td>
-                          <td>{formatNum(row.count)}</td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.count}
+                              format={formatInt}
+                            />
+                          </td>
                           <td>
                             <div className="stats-share">
                               <span className="stats-share-bar" aria-hidden>
@@ -147,9 +165,10 @@ export function StatsPage() {
                                 />
                               </span>
                               <span className="muted small">
-                                %{share.toLocaleString('tr-TR', {
-                                  maximumFractionDigits: 1,
-                                })}
+                                <AnimatedNumber
+                                  value={share}
+                                  format={formatPct}
+                                />
                               </span>
                             </div>
                           </td>
@@ -169,7 +188,8 @@ export function StatsPage() {
             bodyClassName="stack"
           >
             <p className="muted small">
-              Gübreleme + Budama + Hasat + Çapalama + Yakıt harcamaları.
+              Gübreleme + Budama + Hasat + Çapalama + Yakıt + İlaçlama
+              harcamaları.
             </p>
             {stats.byYear.length === 0 ? (
               <p className="muted small">Henüz harcama kaydı yok.</p>
@@ -188,7 +208,10 @@ export function StatsPage() {
                         />
                       </span>
                       <span className="stats-year-total">
-                        {formatMoney(row.total)}
+                        <AnimatedNumber
+                          value={row.total}
+                          format={formatMoney}
+                        />
                       </span>
                     </li>
                   ))}
@@ -203,6 +226,7 @@ export function StatsPage() {
                         <th>Hasat</th>
                         <th>Çapalama</th>
                         <th>Yakıt</th>
+                        <th>İlaçlama</th>
                         <th>Toplam</th>
                       </tr>
                     </thead>
@@ -210,13 +234,49 @@ export function StatsPage() {
                       {stats.byYear.map((row) => (
                         <tr key={row.year}>
                           <td>{row.year}</td>
-                          <td>{formatMoney(row.fertilize)}</td>
-                          <td>{formatMoney(row.prune)}</td>
-                          <td>{formatMoney(row.harvest)}</td>
-                          <td>{formatMoney(row.hoe)}</td>
-                          <td>{formatMoney(row.fuel)}</td>
                           <td>
-                            <strong>{formatMoney(row.total)}</strong>
+                            <AnimatedNumber
+                              value={row.fertilize}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.prune}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.harvest}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.hoe}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.fuel}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <AnimatedNumber
+                              value={row.pesticide}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
+                            <strong>
+                              <AnimatedNumber
+                                value={row.total}
+                                format={formatMoney}
+                              />
+                            </strong>
                           </td>
                         </tr>
                       ))}

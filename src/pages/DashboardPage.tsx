@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { CollapseSection } from '../components/CollapseSection'
 import {
@@ -15,13 +15,46 @@ import {
   deleteField,
   subscribeFields,
 } from '../features/fields/api'
+import { FarmFuelPanel } from '../features/fuel/FarmFuelPanel'
+import { FarmPesticidePanel } from '../features/pesticide/FarmPesticidePanel'
+import { countActiveTreesByFields } from '../features/trees/api'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
 import type { Field } from '../types'
 
+type FieldSortMode = 0 | 1 | 2 | 3
+
+const FIELD_SORT_LABELS: Record<FieldSortMode, string> = {
+  0: 'İsim A→Z',
+  1: 'İsim Z→A',
+  2: 'Dönüm azalan',
+  3: 'Dönüm artan',
+}
+
+function nextSortMode(mode: FieldSortMode): FieldSortMode {
+  return ((mode + 1) % 4) as FieldSortMode
+}
+
+function sortFields(list: Field[], mode: FieldSortMode): Field[] {
+  const copy = [...list]
+  copy.sort((a, b) => {
+    if (mode === 0) return a.name.localeCompare(b.name, 'tr')
+    if (mode === 1) return b.name.localeCompare(a.name, 'tr')
+    const da = a.donum ?? 0
+    const db = b.donum ?? 0
+    if (mode === 2) return db - da || a.name.localeCompare(b.name, 'tr')
+    return da - db || a.name.localeCompare(b.name, 'tr')
+  })
+  return copy
+}
+
 export function DashboardPage() {
-  const { farmId } = useAuth()
+  const { farmId, user } = useAuth()
   const [fields, setFields] = useState<Field[]>([])
+  const [treeCounts, setTreeCounts] = useState<Record<string, number>>({})
+  const [countsReady, setCountsReady] = useState(false)
+  const [plantedSort, setPlantedSort] = useState<FieldSortMode>(0)
+  const [emptySort, setEmptySort] = useState<FieldSortMode>(0)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [rowCount, setRowCount] = useState(12)
@@ -41,6 +74,43 @@ export function DashboardPage() {
       (err) => setError(err.message),
     )
   }, [farmId])
+
+  useEffect(() => {
+    if (!farmId) return
+    let cancelled = false
+    setCountsReady(false)
+    void countActiveTreesByFields(farmId, fields)
+      .then((counts) => {
+        if (!cancelled) {
+          setTreeCounts(counts)
+          setCountsReady(true)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Ağaç sayıları yüklenemedi',
+          )
+          setCountsReady(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [farmId, fields])
+
+  const { plantedFields, emptyFields } = useMemo(() => {
+    const planted: Field[] = []
+    const empty: Field[] = []
+    for (const field of fields) {
+      if ((treeCounts[field.id] ?? 0) > 0) planted.push(field)
+      else empty.push(field)
+    }
+    return {
+      plantedFields: sortFields(planted, plantedSort),
+      emptyFields: sortFields(empty, emptySort),
+    }
+  }, [fields, treeCounts, plantedSort, emptySort])
 
   async function onDeleteField(field: Field) {
     if (!farmId) return
@@ -92,6 +162,83 @@ export function DashboardPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function renderFieldList(list: Field[]) {
+    return (
+      <ul className="field-list">
+        {list.map((field) => (
+          <li key={field.id} className="field-list-item">
+            <Link to={`/fields/${field.id}`} className="field-card">
+              <span className="field-card-icon">
+                <HeadingIcon tone="green">
+                  <IconFields />
+                </HeadingIcon>
+              </span>
+              <strong>{field.name}</strong>
+              <span className="muted">
+                {[
+                  field.area?.trim() || null,
+                  field.species?.trim() || null,
+                  field.donum !== undefined
+                    ? `${field.donum.toLocaleString('tr-TR')} dönüm`
+                    : null,
+                  `${field.rowCount}×${field.colCount}`,
+                  countsReady
+                    ? `${(treeCounts[field.id] ?? 0).toLocaleString('tr-TR')} ağaç`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </Link>
+            <button
+              type="button"
+              className="btn danger btn-icon field-delete-btn"
+              disabled={deletingId === field.id}
+              aria-label={
+                deletingId === field.id ? 'Siliniyor' : 'Tarlayı sil'
+              }
+              title="Tarlayı sil"
+              onClick={() => void onDeleteField(field)}
+            >
+              <IconTrash />
+            </button>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  function renderGroup(
+    title: string,
+    list: Field[],
+    sortMode: FieldSortMode,
+    onCycleSort: () => void,
+  ) {
+    return (
+      <div className="field-group">
+        <div className="field-group-header">
+          <h3 className="field-group-title">
+            {title}
+            <span className="muted small"> ({list.length})</span>
+          </h3>
+          <button
+            type="button"
+            className="btn ghost btn-compact"
+            onClick={onCycleSort}
+            title="Sıralamayı değiştir"
+          >
+            Sırala: {FIELD_SORT_LABELS[sortMode]}
+          </button>
+        </div>
+        {list.length === 0 ? (
+          <p className="muted small">Bu grupta tarla yok.</p>
+        ) : (
+          renderFieldList(list)
+        )}
+      </div>
+    )
   }
 
   return (
@@ -197,6 +344,14 @@ export function DashboardPage() {
         </form>
       </CollapseSection>
 
+      {farmId && user && (
+        <FarmFuelPanel farmId={farmId} userId={user.uid} />
+      )}
+
+      {farmId && user && (
+        <FarmPesticidePanel farmId={farmId} userId={user.uid} />
+      )}
+
       <CollapseSection
         title="Kayıtlı Tarlalar"
         icon={<IconTree />}
@@ -206,45 +361,23 @@ export function DashboardPage() {
       >
         {fields.length === 0 ? (
           <p className="muted">Henüz tarla yok. Yukarıdan ilk tarlayı ekle.</p>
+        ) : !countsReady ? (
+          <p className="muted small">Tarlalar gruplanıyor…</p>
         ) : (
-          <ul className="field-list">
-            {fields.map((field) => (
-              <li key={field.id} className="field-list-item">
-                <Link to={`/fields/${field.id}`} className="field-card">
-                  <span className="field-card-icon">
-                    <HeadingIcon tone="green">
-                      <IconFields />
-                    </HeadingIcon>
-                  </span>
-                  <strong>{field.name}</strong>
-                  <span className="muted">
-                    {[
-                      field.area?.trim() || null,
-                      field.species?.trim() || null,
-                      field.donum !== undefined
-                        ? `${field.donum.toLocaleString('tr-TR')} dönüm`
-                        : null,
-                      `${field.rowCount}×${field.colCount}`,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </Link>
-                <button
-                  type="button"
-                  className="btn danger btn-icon field-delete-btn"
-                  disabled={deletingId === field.id}
-                  aria-label={
-                    deletingId === field.id ? 'Siliniyor' : 'Tarlayı sil'
-                  }
-                  title="Tarlayı sil"
-                  onClick={() => void onDeleteField(field)}
-                >
-                  <IconTrash />
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {renderGroup(
+              'Ağaç ekili tarlalar',
+              plantedFields,
+              plantedSort,
+              () => setPlantedSort((m) => nextSortMode(m)),
+            )}
+            {renderGroup(
+              'Boş tarlalar',
+              emptyFields,
+              emptySort,
+              () => setEmptySort((m) => nextSortMode(m)),
+            )}
+          </>
         )}
       </CollapseSection>
     </div>

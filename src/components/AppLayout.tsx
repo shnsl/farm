@@ -34,13 +34,13 @@ export function AppLayout() {
             <IconFields />
             Tarlalar
           </NavLink>
-          <NavLink to="/search">
-            <IconSearch />
-            Ara
-          </NavLink>
           <NavLink to="/stats">
             <IconCompare />
             İstatistikler
+          </NavLink>
+          <NavLink to="/search">
+            <IconSearch />
+            Ara
           </NavLink>
           <NavLink to="/settings">
             <IconSettings />

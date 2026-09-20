@@ -15,6 +15,7 @@ export interface YearSpendStat {
   harvest: number
   hoe: number
   fuel: number
+  pesticide: number
   total: number
 }
 
@@ -34,7 +35,7 @@ function yearOf(doneAt: string): string | null {
 function addSpend(
   map: Map<string, YearSpendStat>,
   year: string,
-  key: 'fertilize' | 'prune' | 'harvest' | 'hoe' | 'fuel',
+  key: 'fertilize' | 'prune' | 'harvest' | 'hoe' | 'fuel' | 'pesticide',
   amount: number,
 ) {
   if (!amount) return
@@ -45,6 +46,7 @@ function addSpend(
     harvest: 0,
     hoe: 0,
     fuel: 0,
+    pesticide: 0,
     total: 0,
   }
   row[key] += amount
@@ -68,7 +70,7 @@ export async function loadFarmStats(
 
   await Promise.all(
     fields.map(async (field) => {
-      const [treesSnap, fertSnap, pruneSnap, harvestSnap, hoeSnap, fuelSnap] =
+      const [treesSnap, fertSnap, pruneSnap, harvestSnap, hoeSnap] =
         await Promise.all([
           getDocs(
             query(
@@ -87,9 +89,6 @@ export async function loadFarmStats(
           ),
           getDocs(
             collection(db, 'farms', farmId, 'fields', field.id, 'hoeEvents'),
-          ),
-          getDocs(
-            collection(db, 'farms', farmId, 'fields', field.id, 'fuelEvents'),
           ),
         ])
 
@@ -138,21 +137,37 @@ export async function loadFarmStats(
         if (!year) continue
         addSpend(spendMap, year, 'hoe', Number(data.totalPaid ?? 0))
       }
-
-      for (const d of fuelSnap.docs) {
-        const data = d.data()
-        const year = yearOf(String(data.purchasedAt ?? ''))
-        if (!year) continue
-        const liters = Number(data.liters ?? 0)
-        const unitPrice = Number(data.unitPrice ?? 0)
-        const total =
-          data.totalCost !== undefined && data.totalCost !== null
-            ? Number(data.totalCost)
-            : Number((liters * unitPrice).toFixed(2))
-        addSpend(spendMap, year, 'fuel', total)
-      }
     }),
   )
+
+  // Çiftlik geneli yakıt masrafları
+  const fuelSnap = await getDocs(
+    collection(db, 'farms', farmId, 'fuelEvents'),
+  )
+  for (const d of fuelSnap.docs) {
+    const data = d.data()
+    if (String(data.kind ?? 'purchase') === 'consumption') continue
+    const year = yearOf(String(data.doneAt ?? data.purchasedAt ?? ''))
+    if (!year) continue
+    const liters = Number(data.liters ?? 0)
+    const unitPrice = Number(data.unitPrice ?? 0)
+    const total =
+      data.totalCost !== undefined && data.totalCost !== null
+        ? Number(data.totalCost)
+        : Number((liters * unitPrice).toFixed(2))
+    addSpend(spendMap, year, 'fuel', total)
+  }
+
+  // Çiftlik geneli ilaçlama masrafları
+  const pesticideSnap = await getDocs(
+    collection(db, 'farms', farmId, 'pesticideExpenses'),
+  )
+  for (const d of pesticideSnap.docs) {
+    const data = d.data()
+    const year = yearOf(String(data.doneAt ?? ''))
+    if (!year) continue
+    addSpend(spendMap, year, 'pesticide', Number(data.cost ?? 0))
+  }
 
   const bySpecies = [...speciesMap.entries()]
     .map(([species, count]) => ({ species, count }))

@@ -100,6 +100,17 @@ export function IconDrop(props: IconProps) {
   )
 }
 
+export function IconSpray(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 21V10h6v11" />
+      <path d="M8 10V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3" />
+      <path d="M11 4V2" />
+      <path d="M16 8h3M17.5 5.5l2-2M17.5 10.5l2 2" />
+    </Svg>
+  )
+}
+
 export function IconBranch(props: IconProps) {
   return (
     <Svg {...props}>

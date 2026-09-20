@@ -94,10 +94,24 @@ export interface CareEvent {
 
 export type PlowDirection = 'enine' | 'boyuna'
 
+export const PLOW_EQUIPMENT_OPTIONS = [
+  'Kültivator',
+  'Dizgaro',
+  'Alabora',
+  'Toztapan',
+  'Silindir',
+  'Beşli',
+  'Köten',
+] as const
+
+export type PlowEquipmentPreset = (typeof PLOW_EQUIPMENT_OPTIONS)[number]
+
 export interface PlowEvent {
   id: string
   doneAt: string
   direction: PlowDirection
+  /** Sürüm ekipmanı (listeden veya elle girilen) */
+  equipment?: string
   notes?: string
   createdBy: string
   createdAt: string
@@ -121,16 +135,22 @@ export interface HarvestEvent {
   createdAt: string
 }
 
+export type FuelKind = 'purchase' | 'consumption'
+
 export interface FuelEvent {
   id: string
-  /** Yakıt alım zamanı */
-  purchasedAt: string
+  /** Alım (eski tüketim kayıtları okunabilir) */
+  kind: FuelKind
+  /** Alım tarihi */
+  doneAt: string
   /** Litre */
   liters: number
   /** Birim fiyat (₺/lt) */
-  unitPrice: number
-  /** Toplam tutar (lt × birim fiyat) */
-  totalCost: number
+  unitPrice?: number
+  /** Toplam tutar */
+  totalCost?: number
+  /** Nereden alındığı (istasyon / satıcı) */
+  source?: string
   notes?: string
   createdBy: string
   createdAt: string
@@ -178,6 +198,39 @@ export interface HoeEvent {
   dailyWage: number
   /** Toplam harcama */
   totalPaid: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+/** Depoda bekleyen tarım ilacı stoku (çiftlik geneli) */
+export interface PesticideStockItem {
+  id: string
+  /** İlaç adı */
+  name: string
+  /** Son kullanma / miat tarihi */
+  expiresAt: string
+  /** Adet (tane) */
+  quantityPieces: number
+  /** Miktar (ml) */
+  quantityMl: number
+  /** Hangi ağaç çeşidi için */
+  treeSpecies: string
+  /** Kullanım dozu: kaç litre suya */
+  doseWaterLiters: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+/** Yıllık ilaçlama masrafı kaydı (çiftlik geneli) */
+export interface PesticideExpenseEvent {
+  id: string
+  doneAt: string
+  /** İlaç adı (opsiyonel) */
+  pesticideName?: string
+  /** Masraf */
+  cost: number
   notes?: string
   createdBy: string
   createdAt: string

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 /** Üst menü sırası — sağa/sola kaydırma bu listeye göre gezer */
-export const NAV_SWIPE_ROUTES = ['/', '/search', '/stats', '/settings'] as const
+export const NAV_SWIPE_ROUTES = ['/', '/stats', '/search', '/settings'] as const
 
 const SWIPE_MIN_PX = 64
 const SWIPE_RATIO = 1.25

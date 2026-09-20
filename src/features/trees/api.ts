@@ -96,6 +96,25 @@ export function subscribeTrees(
   )
 }
 
+/** Her tarla için aktif ağaç sayısı (boş / ekili gruplama için). */
+export async function countActiveTreesByFields(
+  farmId: string,
+  fields: { id: string }[],
+): Promise<Record<string, number>> {
+  const entries = await Promise.all(
+    fields.map(async (field) => {
+      const snap = await getDocs(
+        collection(db, 'farms', farmId, 'fields', field.id, 'trees'),
+      )
+      const count = snap.docs.filter(
+        (d) => String(d.data().status ?? 'active') === 'active',
+      ).length
+      return [field.id, count] as const
+    }),
+  )
+  return Object.fromEntries(entries)
+}
+
 export async function createTree(
   farmId: string,
   fieldId: string,

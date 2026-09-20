@@ -841,6 +841,25 @@ input:focus {
   gap: 0.75rem;
 }
 
+.field-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.field-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.field-group-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
 .field-list-item {
   position: relative;
 }
@@ -1362,6 +1381,38 @@ html[data-theme='dark'] .legend-fert-count {
   background: #d4a06a;
 }
 
+.legend-pest-cost {
+  background: #1f6f6a;
+}
+
+.legend-pest-count {
+  background: #5a6e2b;
+}
+
+html[data-theme='dark'] .legend-pest-cost {
+  background: #4db5ae;
+}
+
+html[data-theme='dark'] .legend-pest-count {
+  background: #a3c45a;
+}
+
+.legend-fuel-liters {
+  background: #a34a5c;
+}
+
+.legend-fuel-price {
+  background: #c28a2e;
+}
+
+html[data-theme='dark'] .legend-fuel-liters {
+  background: #e08092;
+}
+
+html[data-theme='dark'] .legend-fuel-price {
+  background: #e0b35a;
+}
+
 .legend-prune-wage {
   background: #6b4ea0;
 }
@@ -1421,6 +1472,38 @@ html[data-theme='dark'] .chart-bar-fert-cost {
 
 html[data-theme='dark'] .chart-bar-fert-count {
   fill: #d4a06a;
+}
+
+.chart-bar-pest-cost {
+  fill: #1f6f6a;
+}
+
+.chart-bar-pest-count {
+  fill: #5a6e2b;
+}
+
+html[data-theme='dark'] .chart-bar-pest-cost {
+  fill: #4db5ae;
+}
+
+html[data-theme='dark'] .chart-bar-pest-count {
+  fill: #a3c45a;
+}
+
+.chart-bar-fuel-liters {
+  fill: #a34a5c;
+}
+
+.chart-bar-fuel-price {
+  fill: #c28a2e;
+}
+
+html[data-theme='dark'] .chart-bar-fuel-liters {
+  fill: #e08092;
+}
+
+html[data-theme='dark'] .chart-bar-fuel-price {
+  fill: #e0b35a;
 }
 
 .chart-bar-prune-wage {
