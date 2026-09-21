@@ -51,6 +51,10 @@ export interface Field {
   /** Tarlanın varsayılan / toplu ağaç çeşidi */
   species?: string
   notes?: string
+  /** Aktif ağaç sayısı (denormalize; undefined = henüz hesaplanmamış) */
+  activeTreeCount?: number
+  /** Aktif ağaçların çeşit bazında sayısı */
+  speciesCounts?: Record<string, number>
   /** Tarla alanı harita fotoğrafı (sıkıştırılmış JPEG data URL) */
   mapImageDataUrl?: string
   /** Yüklenen harita dosya adı */
@@ -128,8 +132,8 @@ export interface HarvestEvent {
   totalPaid: number
   /** Tahmini hasat edilen kilo */
   estimatedKg?: number
-  /** Ürün ortalama fiyatı (birim / kg) */
-  avgPricePerKg?: number
+  /** Ürün çeşidi (depoya giriş) */
+  species?: string
   notes?: string
   createdBy: string
   createdAt: string
@@ -233,6 +237,43 @@ export interface PesticideExpenseEvent {
   cost: number
   /** Hızlı giriş / tarlaya bağlı ilaçlama */
   fieldId?: string
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+/** Çiftlik geneli iş / masraf kaydı (isteğe bağlı tarla) */
+export interface GeneralWorkEvent {
+  id: string
+  doneAt: string
+  /** Yapılan iş */
+  work: string
+  /** Masraf */
+  cost: number
+  /** Hızlı giriş / tarlaya bağlı genel iş */
+  fieldId?: string
+  createdBy: string
+  createdAt: string
+}
+
+/** Depodaki ürün stoğu (çeşit bazında kilo) */
+export interface WarehouseStockItem {
+  id: string
+  species: string
+  kg: number
+  updatedAt: string
+}
+
+/** Depodan satış / kazanç kaydı */
+export interface SaleEvent {
+  id: string
+  doneAt: string
+  species: string
+  soldKg: number
+  /** Birim fiyat (₺/kg) */
+  unitPrice: number
+  /** Kazanç (soldKg × unitPrice) */
+  earnings: number
   notes?: string
   createdBy: string
   createdAt: string

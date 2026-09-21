@@ -34,6 +34,7 @@ import {
   updateTreeSchema,
 } from '../features/trees/api'
 import { FieldCarePanel } from '../features/care/FieldCarePanel'
+import { FieldGeneralWorksPanel } from '../features/general-works/FieldGeneralWorksPanel'
 import { FieldHoePanel } from '../features/hoe/FieldHoePanel'
 import { FieldPrunePanel } from '../features/prune/FieldPrunePanel'
 import { FieldPlowPanel } from '../features/plow/FieldPlowPanel'
@@ -710,6 +711,7 @@ export function FieldDetailPage() {
           farmId={farmId}
           fieldId={field.id}
           userId={user.uid}
+          defaultSpecies={field.species ?? ''}
         />
       )}
 
@@ -731,6 +733,14 @@ export function FieldDetailPage() {
 
       {farmId && user && (
         <FieldHoePanel
+          farmId={farmId}
+          fieldId={field.id}
+          userId={user.uid}
+        />
+      )}
+
+      {farmId && user && (
+        <FieldGeneralWorksPanel
           farmId={farmId}
           fieldId={field.id}
           userId={user.uid}

@@ -35,7 +35,25 @@ function optionalNumber(value: unknown): number | undefined {
   return Number.isNaN(n) ? undefined : n
 }
 
-function mapField(id: string, data: Record<string, unknown>): Field {
+function mapSpeciesCounts(
+  raw: unknown,
+): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(value)
+    if (!key.trim() || Number.isNaN(n) || n <= 0) continue
+    out[key] = n
+  }
+  return Object.keys(out).length > 0 ? out : {}
+}
+
+function mapField(
+  id: string,
+  data: Record<string, unknown>,
+  options?: { includeMap?: boolean },
+): Field {
+  const includeMap = options?.includeMap ?? false
   return {
     id,
     name: String(data.name ?? ''),
@@ -45,11 +63,22 @@ function mapField(id: string, data: Record<string, unknown>): Field {
     donum: optionalNumber(data.donum),
     species: data.species ? String(data.species) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
-    mapImageDataUrl: data.mapImageDataUrl
-      ? String(data.mapImageDataUrl)
-      : undefined,
-    mapFileName: data.mapFileName ? String(data.mapFileName) : undefined,
-    mapUpdatedAt: data.mapUpdatedAt ? String(data.mapUpdatedAt) : undefined,
+    activeTreeCount:
+      data.activeTreeCount === undefined || data.activeTreeCount === null
+        ? undefined
+        : Number(data.activeTreeCount),
+    speciesCounts:
+      data.speciesCounts === undefined
+        ? undefined
+        : mapSpeciesCounts(data.speciesCounts),
+    mapImageDataUrl:
+      includeMap && data.mapImageDataUrl
+        ? String(data.mapImageDataUrl)
+        : undefined,
+    mapFileName:
+      includeMap && data.mapFileName ? String(data.mapFileName) : undefined,
+    mapUpdatedAt:
+      includeMap && data.mapUpdatedAt ? String(data.mapUpdatedAt) : undefined,
     plowStandard: {
       timesPerYear: 0,
       windows: [],
@@ -92,7 +121,7 @@ export function subscribeField(
         onData(null)
         return
       }
-      onData(mapField(snap.id, snap.data()))
+      onData(mapField(snap.id, snap.data(), { includeMap: true }))
     },
     (err) => onError?.(err),
   )
@@ -113,6 +142,8 @@ export async function createField(
     donum: parsed.donum === undefined ? null : parsed.donum,
     species,
     notes: parsed.notes || null,
+    activeTreeCount: 0,
+    speciesCounts: {},
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdAtIso: now,

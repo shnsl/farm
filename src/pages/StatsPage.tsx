@@ -5,6 +5,7 @@ import {
   IconArea,
   IconCompare,
   IconFields,
+  IconFuel,
   IconTree,
   IconVariety,
   IconWallet,
@@ -12,7 +13,16 @@ import {
   SectionTitle,
 } from '../components/Icons'
 import { subscribeFields } from '../features/fields/api'
-import { loadFarmStats, type FarmStats } from '../features/stats/api'
+import { backfillMissingTreeStats } from '../features/fields/treeStats'
+import {
+  buildInstantFarmStats,
+  loadFarmStats,
+  type FarmStats,
+} from '../features/stats/api'
+import {
+  FarmDepotPanel,
+  FarmEarningsPanel,
+} from '../features/warehouse/FarmDepotPanel'
 import { useAuth } from '../lib/auth'
 import type { Field } from '../types'
 
@@ -33,11 +43,11 @@ function formatPct(value: number): string {
 }
 
 export function StatsPage() {
-  const { farmId } = useAuth()
+  const { farmId, user } = useAuth()
   const [fields, setFields] = useState<Field[]>([])
   const [fieldsReady, setFieldsReady] = useState(false)
   const [stats, setStats] = useState<FarmStats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [spendLoading, setSpendLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -53,6 +63,32 @@ export function StatsPage() {
     )
   }, [farmId])
 
+  useEffect(() => {
+    if (!farmId || !fieldsReady || fields.length === 0) return
+    const missing = fields.filter(
+      (f) => f.activeTreeCount === undefined || f.speciesCounts === undefined,
+    )
+    if (missing.length === 0) return
+    let cancelled = false
+    void backfillMissingTreeStats(farmId, missing).catch((err: unknown) => {
+      if (!cancelled) {
+        setError(
+          err instanceof Error ? err.message : 'Ağaç sayaçları güncellenemedi',
+        )
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [farmId, fieldsReady, fields])
+
+  const instant = useMemo(() => buildInstantFarmStats(fields), [fields])
+  const display: FarmStats = stats ?? {
+    ...instant,
+    currentYearFuelSpend: 0,
+    byYear: [],
+  }
+
   const fieldIdsKey = useMemo(
     () => fields.map((f) => f.id).join('|'),
     [fields],
@@ -61,7 +97,7 @@ export function StatsPage() {
   useEffect(() => {
     if (!farmId || !fieldsReady) return
     let cancelled = false
-    setLoading(true)
+    setSpendLoading(true)
     setError(null)
     void loadFarmStats(farmId, fields)
       .then((result) => {
@@ -75,7 +111,7 @@ export function StatsPage() {
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setSpendLoading(false)
       })
     return () => {
       cancelled = true
@@ -83,7 +119,7 @@ export function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- aynı tarla setinde tekrar yükleme
   }, [farmId, fieldsReady, fieldIdsKey])
 
-  const maxSpend = Math.max(...(stats?.byYear.map((y) => y.total) ?? [0]), 1)
+  const maxSpend = Math.max(...(display.byYear.map((y) => y.total) ?? [0]), 1)
 
   return (
     <div className="page">
@@ -104,37 +140,96 @@ export function StatsPage() {
         </p>
       )}
 
-      {loading && !stats ? (
+      {!fieldsReady ? (
         <p className="muted">İstatistikler yükleniyor…</p>
-      ) : stats ? (
+      ) : (
         <>
           <section className="stats-summary-grid">
             <div className="panel stats-summary-card">
               <SectionTitle as="h3" icon={<IconFields />} tone="teal">
                 Tarla
               </SectionTitle>
-              <p className="stats-summary-value">
-                <AnimatedNumber value={stats.fieldCount} format={formatInt} />
-              </p>
-              <p className="muted small">Kayıtlı tarla</p>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.fieldCount}
+                    format={formatInt}
+                  />
+                </p>
+                <p className="muted small">Ağaç ekili tarla</p>
+              </div>
+            </div>
+            <div className="panel stats-summary-card">
+              <SectionTitle as="h3" icon={<IconFields />} tone="amber">
+                Boş Tarla
+              </SectionTitle>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.emptyFieldCount}
+                    format={formatInt}
+                  />
+                </p>
+                <p className="muted small">Ağaçsız tarla</p>
+              </div>
+            </div>
+            <div className="panel stats-summary-card">
+              <SectionTitle as="h3" icon={<IconTree />} tone="green">
+                Toplam Ağaç
+              </SectionTitle>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.totalTrees}
+                    format={formatInt}
+                  />
+                </p>
+                <p className="muted small">Aktif ağaç</p>
+              </div>
             </div>
             <div className="panel stats-summary-card">
               <SectionTitle as="h3" icon={<IconArea />} tone="olive">
                 Dönüm
               </SectionTitle>
-              <p className="stats-summary-value">
-                <AnimatedNumber value={stats.totalDonum} format={formatNum} />
-              </p>
-              <p className="muted small">Toplam alan</p>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.totalDonum}
+                    format={formatNum}
+                  />
+                </p>
+                <p className="muted small">Ekili alan</p>
+              </div>
             </div>
             <div className="panel stats-summary-card">
-              <SectionTitle as="h3" icon={<IconTree />} tone="green">
-                Ağaç
+              <SectionTitle as="h3" icon={<IconArea />} tone="rose">
+                Boş Dönüm
               </SectionTitle>
-              <p className="stats-summary-value">
-                <AnimatedNumber value={stats.totalTrees} format={formatInt} />
-              </p>
-              <p className="muted small">Aktif ağaç</p>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.emptyDonum}
+                    format={formatNum}
+                  />
+                </p>
+                <p className="muted small">Boş tarla alanı</p>
+              </div>
+            </div>
+            <div className="panel stats-summary-card">
+              <SectionTitle as="h3" icon={<IconFuel />} tone="sky">
+                Yakıt
+              </SectionTitle>
+              <div className="stats-summary-body">
+                <p className="stats-summary-value">
+                  <AnimatedNumber
+                    value={display.currentYearFuelSpend}
+                    format={formatMoney}
+                  />
+                </p>
+                <p className="muted small">
+                  {new Date().getFullYear()} alım (₺)
+                </p>
+              </div>
             </div>
           </section>
 
@@ -144,7 +239,7 @@ export function StatsPage() {
             tone="green"
             bodyClassName="stack"
           >
-            {stats.bySpecies.length === 0 ? (
+            {display.bySpecies.length === 0 ? (
               <p className="muted small">Henüz aktif ağaç yok.</p>
             ) : (
               <div className="table-wrap">
@@ -157,10 +252,10 @@ export function StatsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.bySpecies.map((row) => {
+                    {display.bySpecies.map((row) => {
                       const share =
-                        stats.totalTrees > 0
-                          ? (row.count / stats.totalTrees) * 100
+                        display.totalTrees > 0
+                          ? (row.count / display.totalTrees) * 100
                           : 0
                       return (
                         <tr key={row.species}>
@@ -203,15 +298,17 @@ export function StatsPage() {
             bodyClassName="stack"
           >
             <p className="muted small">
-              Gübreleme + Budama + Hasat + Çapalama + Yakıt + İlaçlama
-              harcamaları.
+              Gübreleme + Budama + Hasat + Çapalama + Yakıt + İlaçlama + Genel
+              İşler harcamaları.
             </p>
-            {stats.byYear.length === 0 ? (
+            {spendLoading && display.byYear.length === 0 ? (
+              <p className="muted small">Harcamalar yükleniyor…</p>
+            ) : display.byYear.length === 0 ? (
               <p className="muted small">Henüz harcama kaydı yok.</p>
             ) : (
               <>
                 <ul className="stats-year-bars" aria-label="Yıllık harcama">
-                  {[...stats.byYear].reverse().map((row) => (
+                  {[...display.byYear].reverse().map((row) => (
                     <li key={row.year}>
                       <span className="stats-year-label">{row.year}</span>
                       <span className="stats-year-track" aria-hidden>
@@ -242,11 +339,12 @@ export function StatsPage() {
                         <th>Çapalama</th>
                         <th>Yakıt</th>
                         <th>İlaçlama</th>
+                        <th>Genel İşler</th>
                         <th>Toplam</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {stats.byYear.map((row) => (
+                      {display.byYear.map((row) => (
                         <tr key={row.year}>
                           <td>{row.year}</td>
                           <td>
@@ -286,6 +384,12 @@ export function StatsPage() {
                             />
                           </td>
                           <td>
+                            <AnimatedNumber
+                              value={row.generalWork}
+                              format={formatMoney}
+                            />
+                          </td>
+                          <td>
                             <strong>
                               <AnimatedNumber
                                 value={row.total}
@@ -301,8 +405,14 @@ export function StatsPage() {
               </>
             )}
           </CollapseSection>
+
+          {farmId && user && (
+            <FarmDepotPanel farmId={farmId} userId={user.uid} />
+          )}
+
+          {farmId && <FarmEarningsPanel farmId={farmId} />}
         </>
-      ) : null}
+      )}
     </div>
   )
 }

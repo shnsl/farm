@@ -23,7 +23,6 @@ import {
   deleteHarvestEvent,
   deletePlowEvent,
   PLOW_DIRECTION_LABELS,
-  harvestProductValue,
   subscribeHarvestEvents,
   subscribePlowEvents,
   updateHarvestEvent,
@@ -43,6 +42,8 @@ interface FieldPlowPanelProps {
   farmId: string
   fieldId: string
   userId: string
+  /** Tarla varsayılan çeşidi (hasat / depo) */
+  defaultSpecies?: string
 }
 
 const PREVIEW_LIMIT = 4
@@ -95,6 +96,7 @@ export function FieldPlowPanel({
   farmId,
   fieldId,
   userId,
+  defaultSpecies = '',
 }: FieldPlowPanelProps) {
   const [plows, setPlows] = useState<PlowEvent[]>([])
   const [harvests, setHarvests] = useState<HarvestEvent[]>([])
@@ -115,7 +117,7 @@ export function FieldPlowPanel({
   const [totalPaid, setTotalPaid] = useState(0)
   const [totalEdited, setTotalEdited] = useState(false)
   const [estimatedKg, setEstimatedKg] = useState('')
-  const [avgPricePerKg, setAvgPricePerKg] = useState('')
+  const [harvestSpecies, setHarvestSpecies] = useState(defaultSpecies)
   const [harvestNotes, setHarvestNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -127,11 +129,15 @@ export function FieldPlowPanel({
   const [editTotal, setEditTotal] = useState(0)
   const [editTotalEdited, setEditTotalEdited] = useState(true)
   const [editKg, setEditKg] = useState('')
-  const [editAvgPrice, setEditAvgPrice] = useState('')
+  const [editSpecies, setEditSpecies] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [plowModalOpen, setPlowModalOpen] = useState(false)
   const [harvestModalOpen, setHarvestModalOpen] = useState(false)
   const [chartModalOpen, setChartModalOpen] = useState(false)
+
+  useEffect(() => {
+    setHarvestSpecies((prev) => prev || defaultSpecies)
+  }, [defaultSpecies])
 
   useEffect(() => {
     const unsubPlow = subscribePlowEvents(
@@ -171,25 +177,6 @@ export function FieldPlowPanel({
     return [...harvests].sort((a, b) => b.doneAt.localeCompare(a.doneAt))
   }, [harvests])
 
-  const productValuePreview = useMemo(
-    () =>
-      harvestProductValue({
-        estimatedKg: estimatedKg === '' ? undefined : Number(estimatedKg),
-        avgPricePerKg:
-          avgPricePerKg === '' ? undefined : Number(avgPricePerKg),
-      }),
-    [estimatedKg, avgPricePerKg],
-  )
-
-  const editProductValuePreview = useMemo(
-    () =>
-      harvestProductValue({
-        estimatedKg: editKg === '' ? undefined : Number(editKg),
-        avgPricePerKg: editAvgPrice === '' ? undefined : Number(editAvgPrice),
-      }),
-    [editKg, editAvgPrice],
-  )
-
   function startEditHarvest(h: HarvestEvent) {
     setEditingHarvestId(h.id)
     setEditDate(h.doneAt.slice(0, 10))
@@ -198,9 +185,7 @@ export function FieldPlowPanel({
     setEditTotal(h.totalPaid)
     setEditTotalEdited(true)
     setEditKg(h.estimatedKg !== undefined ? String(h.estimatedKg) : '')
-    setEditAvgPrice(
-      h.avgPricePerKg !== undefined ? String(h.avgPricePerKg) : '',
-    )
+    setEditSpecies(h.species ?? defaultSpecies)
     setEditNotes(h.notes ?? '')
     setError(null)
     setInfo(null)
@@ -253,7 +238,7 @@ export function FieldPlowPanel({
       dailyWage,
       totalPaid,
       estimatedKg: estimatedKg === '' ? undefined : Number(estimatedKg),
-      avgPricePerKg: avgPricePerKg === '' ? undefined : Number(avgPricePerKg),
+      species: harvestSpecies || undefined,
       notes: harvestNotes,
     })
     if (!parsed.success) {
@@ -265,12 +250,12 @@ export function FieldPlowPanel({
       await createHarvestEvent(farmId, fieldId, parsed.data, userId)
       setHarvestNotes('')
       setEstimatedKg('')
-      setAvgPricePerKg('')
+      setHarvestSpecies(defaultSpecies)
       setWorkerCount(0)
       setDailyWage(0)
       setTotalPaid(0)
       setTotalEdited(false)
-      setInfo('Hasat kaydı eklendi.')
+      setInfo('Hasat kaydı eklendi; kilo depoya işlendi.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hasat eklenemedi')
     } finally {
@@ -289,7 +274,7 @@ export function FieldPlowPanel({
       dailyWage: editWage,
       totalPaid: editTotal,
       estimatedKg: editKg === '' ? undefined : Number(editKg),
-      avgPricePerKg: editAvgPrice === '' ? undefined : Number(editAvgPrice),
+      species: editSpecies || undefined,
       notes: editNotes,
     })
     if (!parsed.success) {
@@ -345,14 +330,9 @@ export function FieldPlowPanel({
         <span>
           {h.doneAt.slice(0, 10)} · {h.workerCount} işçi · yevmiye{' '}
           {formatMoney(h.dailyWage)} · toplam {formatMoney(h.totalPaid)}
+          {h.species ? ` · ${h.species}` : ''}
           {h.estimatedKg !== undefined
             ? ` · ~${formatMoney(h.estimatedKg)} kg`
-            : ''}
-          {h.avgPricePerKg !== undefined
-            ? ` · ${formatMoney(h.avgPricePerKg)} ₺/kg`
-            : ''}
-          {harvestProductValue(h) > 0
-            ? ` · ürün ${formatMoney(harvestProductValue(h))}`
             : ''}
           {h.notes ? ` · ${h.notes}` : ''}
         </span>
@@ -537,19 +517,13 @@ export function FieldPlowPanel({
             />
           </label>
           <label>
-            Ortalama fiyat (₺/kg)
+            Çeşit
             <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={avgPricePerKg}
-              onChange={(e) => setAvgPricePerKg(e.target.value)}
-              placeholder="Veri girmek için dokunun.."
+              value={harvestSpecies}
+              onChange={(e) => setHarvestSpecies(e.target.value)}
+              placeholder="Depoya işlenecek çeşit"
             />
           </label>
-          <p className="muted small span-2">
-            Ürün tutarı (kg × fiyat): {formatMoney(productValuePreview)}
-          </p>
           <label className="span-2">
             Not
             <input
@@ -560,7 +534,7 @@ export function FieldPlowPanel({
           </label>
           <p className="muted small span-2">
             Toplam ödeme varsayılan olarak işçi × yevmiye; istersen elle
-            değiştirebilirsin.
+            değiştirebilirsin. Kilo + çeşit girilirse ürün depoya eklenir.
           </p>
           <button className="btn primary" type="submit" disabled={saving}>
             {saving ? 'Kaydediliyor…' : 'Hasat ekle'}
@@ -583,9 +557,8 @@ export function FieldPlowPanel({
                   <th>İşçi</th>
                   <th>Yevmiye</th>
                   <th>Toplam ödeme</th>
+                  <th>Çeşit</th>
                   <th>Tahmini kg</th>
-                  <th>Ort. fiyat</th>
-                  <th>Ürün tutarı</th>
                   <th></th>
                 </tr>
               </thead>
@@ -593,7 +566,7 @@ export function FieldPlowPanel({
                 {harvestByYear.map((h) =>
                   editingHarvestId === h.id ? (
                     <tr key={h.id} className="harvest-edit-row">
-                      <td colSpan={9}>
+                      <td colSpan={8}>
                         <form
                           className="form-grid harvest-edit-form"
                           onSubmit={onSaveHarvestEdit}
@@ -650,6 +623,14 @@ export function FieldPlowPanel({
                             />
                           </label>
                           <label>
+                            Çeşit
+                            <input
+                              value={editSpecies}
+                              onChange={(e) => setEditSpecies(e.target.value)}
+                              placeholder="Depoya işlenecek çeşit"
+                            />
+                          </label>
+                          <label>
                             Tahmini kg
                             <input
                               type="number"
@@ -659,20 +640,6 @@ export function FieldPlowPanel({
                               onChange={(e) => setEditKg(e.target.value)}
                             />
                           </label>
-                          <label>
-                            Ort. fiyat (₺/kg)
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={editAvgPrice}
-                              onChange={(e) => setEditAvgPrice(e.target.value)}
-                            />
-                          </label>
-                          <p className="muted small span-2">
-                            Ürün tutarı (kg × fiyat):{' '}
-                            {formatMoney(editProductValuePreview)}
-                          </p>
                           <label className="span-2">
                             Not
                             <input
@@ -706,19 +673,10 @@ export function FieldPlowPanel({
                       <td>{h.workerCount}</td>
                       <td>{formatMoney(h.dailyWage)}</td>
                       <td>{formatMoney(h.totalPaid)}</td>
+                      <td>{h.species?.trim() || '—'}</td>
                       <td>
                         {h.estimatedKg !== undefined
                           ? formatMoney(h.estimatedKg)
-                          : '—'}
-                      </td>
-                      <td>
-                        {h.avgPricePerKg !== undefined
-                          ? formatMoney(h.avgPricePerKg)
-                          : '—'}
-                      </td>
-                      <td>
-                        {harvestProductValue(h) > 0
-                          ? formatMoney(harvestProductValue(h))
                           : '—'}
                       </td>
                       <td>

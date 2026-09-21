@@ -19,7 +19,7 @@ export function AnimatedNumber({
   value,
   format = (n) =>
     n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }),
-  duration = 1700,
+  duration = 1000,
   className,
 }: AnimatedNumberProps) {
   const startFrom = value <= 0 ? 0 : Math.min(1, value)

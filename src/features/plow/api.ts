@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -17,6 +18,7 @@ import type {
   PlowDirection,
   PlowEvent,
 } from '../../types'
+import { adjustWarehouseStock } from '../warehouse/api'
 
 export const PLOW_DIRECTION_LABELS: Record<PlowDirection, string> = {
   enine: 'Enine',
@@ -30,32 +32,41 @@ export const createPlowSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 })
 
-export const createHarvestSchema = z.object({
-  doneAt: z.string().trim().min(1, 'Tarih gerekli'),
-  workerCount: z.coerce.number().int().min(0, 'İşçi sayısı 0 veya daha büyük olmalı'),
-  dailyWage: z.coerce.number().min(0, 'Yevmiye 0 veya daha büyük olmalı'),
-  totalPaid: z.coerce.number().min(0, 'Toplam ödeme 0 veya daha büyük olmalı'),
-  estimatedKg: z.coerce
-    .number()
-    .min(0, 'Tahmini kilo 0 veya daha büyük olmalı')
-    .optional(),
-  avgPricePerKg: z.coerce
-    .number()
-    .min(0, 'Ortalama fiyat 0 veya daha büyük olmalı')
-    .optional(),
-  notes: z.string().trim().max(500).optional(),
-})
+export const createHarvestSchema = z
+  .object({
+    doneAt: z.string().trim().min(1, 'Tarih gerekli'),
+    workerCount: z.coerce
+      .number()
+      .int()
+      .min(0, 'İşçi sayısı 0 veya daha büyük olmalı'),
+    dailyWage: z.coerce.number().min(0, 'Yevmiye 0 veya daha büyük olmalı'),
+    totalPaid: z.coerce
+      .number()
+      .min(0, 'Toplam ödeme 0 veya daha büyük olmalı'),
+    estimatedKg: z.coerce
+      .number()
+      .min(0, 'Tahmini kilo 0 veya daha büyük olmalı')
+      .optional(),
+    species: z.string().trim().max(80).optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if ((data.estimatedKg ?? 0) > 0 && !data.species?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Kilo girildiyse çeşit gerekli',
+        path: ['species'],
+      })
+    }
+  })
 
 export type CreatePlowInput = z.infer<typeof createPlowSchema>
 export type CreateHarvestInput = z.infer<typeof createHarvestSchema>
 
-export function harvestProductValue(h: {
-  estimatedKg?: number
-  avgPricePerKg?: number
-}): number {
-  const kg = h.estimatedKg ?? 0
-  const price = h.avgPricePerKg ?? 0
-  return Number((kg * price).toFixed(2))
+function optionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const n = Number(value)
+  return Number.isNaN(n) ? undefined : n
 }
 
 function mapPlow(id: string, data: Record<string, unknown>): PlowEvent {
@@ -71,13 +82,8 @@ function mapPlow(id: string, data: Record<string, unknown>): PlowEvent {
   }
 }
 
-function optionalNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined || value === '') return undefined
-  const n = Number(value)
-  return Number.isNaN(n) ? undefined : n
-}
-
 function mapHarvest(id: string, data: Record<string, unknown>): HarvestEvent {
+  const species = data.species ? String(data.species).trim() : undefined
   return {
     id,
     doneAt: String(data.doneAt ?? ''),
@@ -85,7 +91,7 @@ function mapHarvest(id: string, data: Record<string, unknown>): HarvestEvent {
     dailyWage: Number(data.dailyWage ?? 0),
     totalPaid: Number(data.totalPaid ?? 0),
     estimatedKg: optionalNumber(data.estimatedKg),
-    avgPricePerKg: optionalNumber(data.avgPricePerKg),
+    species: species || undefined,
     notes: data.notes ? String(data.notes) : undefined,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAtIso ?? ''),
@@ -157,24 +163,36 @@ export async function createHarvestEvent(
 ): Promise<string> {
   const parsed = createHarvestSchema.parse(input)
   const now = new Date().toISOString()
-  const ref = await addDoc(
-    collection(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents'),
-    {
-      doneAt: parsed.doneAt,
-      workerCount: parsed.workerCount,
-      dailyWage: parsed.dailyWage,
-      totalPaid: parsed.totalPaid,
-      estimatedKg:
-        parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
-      avgPricePerKg:
-        parsed.avgPricePerKg === undefined ? null : parsed.avgPricePerKg,
-      notes: parsed.notes || null,
-      createdBy,
-      createdAt: serverTimestamp(),
-      createdAtIso: now,
-    },
-  )
-  return ref.id
+  const kg = parsed.estimatedKg ?? 0
+  const species = parsed.species?.trim() || ''
+
+  if (kg > 0 && species) {
+    await adjustWarehouseStock(farmId, species, kg)
+  }
+
+  try {
+    const ref = await addDoc(
+      collection(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents'),
+      {
+        doneAt: parsed.doneAt,
+        workerCount: parsed.workerCount,
+        dailyWage: parsed.dailyWage,
+        totalPaid: parsed.totalPaid,
+        estimatedKg: parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
+        species: species || null,
+        notes: parsed.notes || null,
+        createdBy,
+        createdAt: serverTimestamp(),
+        createdAtIso: now,
+      },
+    )
+    return ref.id
+  } catch (err) {
+    if (kg > 0 && species) {
+      await adjustWarehouseStock(farmId, species, -kg)
+    }
+    throw err
+  }
 }
 
 export async function updateHarvestEvent(
@@ -184,20 +202,48 @@ export async function updateHarvestEvent(
   input: CreateHarvestInput,
 ): Promise<void> {
   const parsed = createHarvestSchema.parse(input)
-  await updateDoc(
-    doc(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents', eventId),
-    {
+  const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents', eventId)
+  const prevSnap = await getDoc(ref)
+  const prev = prevSnap.exists() ? mapHarvest(eventId, prevSnap.data()) : null
+
+  const oldKg = prev?.estimatedKg ?? 0
+  const oldSpecies = prev?.species?.trim() || ''
+  const newKg = parsed.estimatedKg ?? 0
+  const newSpecies = parsed.species?.trim() || ''
+
+  if (oldKg > 0 && oldSpecies) {
+    await adjustWarehouseStock(farmId, oldSpecies, -oldKg)
+  }
+  try {
+    if (newKg > 0 && newSpecies) {
+      await adjustWarehouseStock(farmId, newSpecies, newKg)
+    }
+  } catch (err) {
+    if (oldKg > 0 && oldSpecies) {
+      await adjustWarehouseStock(farmId, oldSpecies, oldKg)
+    }
+    throw err
+  }
+
+  try {
+    await updateDoc(ref, {
       doneAt: parsed.doneAt,
       workerCount: parsed.workerCount,
       dailyWage: parsed.dailyWage,
       totalPaid: parsed.totalPaid,
-      estimatedKg:
-        parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
-      avgPricePerKg:
-        parsed.avgPricePerKg === undefined ? null : parsed.avgPricePerKg,
+      estimatedKg: parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
+      species: newSpecies || null,
       notes: parsed.notes || null,
-    },
-  )
+    })
+  } catch (err) {
+    if (newKg > 0 && newSpecies) {
+      await adjustWarehouseStock(farmId, newSpecies, -newKg)
+    }
+    if (oldKg > 0 && oldSpecies) {
+      await adjustWarehouseStock(farmId, oldSpecies, oldKg)
+    }
+    throw err
+  }
 }
 
 export async function deletePlowEvent(
@@ -215,9 +261,17 @@ export async function deleteHarvestEvent(
   fieldId: string,
   eventId: string,
 ): Promise<void> {
-  await deleteDoc(
-    doc(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents', eventId),
-  )
+  const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'harvestEvents', eventId)
+  const snap = await getDoc(ref)
+  if (snap.exists()) {
+    const h = mapHarvest(eventId, snap.data())
+    const kg = h.estimatedKg ?? 0
+    const species = h.species?.trim() || ''
+    if (kg > 0 && species) {
+      await adjustWarehouseStock(farmId, species, -kg)
+    }
+  }
+  await deleteDoc(ref)
 }
 
 export interface PlowStats {

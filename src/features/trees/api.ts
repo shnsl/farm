@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -22,6 +23,7 @@ import {
 } from '../../lib/cells'
 import { db } from '../../lib/firebase'
 import type { Tree, TreeHealth, TreeStatus } from '../../types'
+import { adjustFieldTreeStats } from '../fields/treeStats'
 
 const BATCH_LIMIT = 450
 
@@ -96,13 +98,16 @@ export function subscribeTrees(
   )
 }
 
-/** Her tarla için aktif ağaç sayısı (boş / ekili gruplama için). */
+/** Her tarla için aktif ağaç sayısı — denormalize sayaç yoksa tarar. */
 export async function countActiveTreesByFields(
   farmId: string,
-  fields: { id: string }[],
+  fields: { id: string; activeTreeCount?: number }[],
 ): Promise<Record<string, number>> {
   const entries = await Promise.all(
     fields.map(async (field) => {
+      if (field.activeTreeCount !== undefined) {
+        return [field.id, field.activeTreeCount] as const
+      }
       const snap = await getDocs(
         collection(db, 'farms', farmId, 'fields', field.id, 'trees'),
       )
@@ -152,6 +157,15 @@ export async function createTree(
       updatedAtIso: now,
     },
   )
+  if (parsed.status === 'active') {
+    const species = parsed.species?.trim() || ''
+    await adjustFieldTreeStats(
+      farmId,
+      fieldId,
+      1,
+      species ? [{ species, delta: 1 }] : undefined,
+    )
+  }
   return ref.id
 }
 
@@ -162,8 +176,11 @@ export async function updateTreeDetails(
   input: UpdateTreeInput,
 ): Promise<void> {
   const parsed = updateTreeSchema.parse(input)
+  const treeRef = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
+  const prevSnap = await getDoc(treeRef)
+  const prev = prevSnap.exists() ? mapTree(treeId, prevSnap.data()) : null
   const now = new Date().toISOString()
-  await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId), {
+  await updateDoc(treeRef, {
     species: parsed.species?.trim() ? parsed.species.trim() : null,
     label: parsed.label?.trim() ? parsed.label.trim() : null,
     plantedAt: parsed.plantedAt?.trim() ? parsed.plantedAt.trim() : null,
@@ -173,6 +190,27 @@ export async function updateTreeDetails(
     updatedAt: serverTimestamp(),
     updatedAtIso: now,
   })
+
+  if (!prev) return
+
+  const nextStatus = parsed.status ?? prev.status
+  const nextSpecies =
+    parsed.species !== undefined
+      ? parsed.species.trim() || ''
+      : prev.species?.trim() || ''
+  const prevActive = prev.status === 'active'
+  const nextActive = nextStatus === 'active'
+  const prevSpecies = prev.species?.trim() || ''
+
+  const deltas: { species: string; delta: number }[] = []
+  if (prevActive && prevSpecies) deltas.push({ species: prevSpecies, delta: -1 })
+  if (nextActive && nextSpecies) deltas.push({ species: nextSpecies, delta: 1 })
+
+  let deltaActive = 0
+  if (prevActive && !nextActive) deltaActive = -1
+  if (!prevActive && nextActive) deltaActive = 1
+
+  await adjustFieldTreeStats(farmId, fieldId, deltaActive, deltas)
 }
 
 function matchesQuery(tree: Tree, fieldName: string, needle: string): boolean {
@@ -287,10 +325,13 @@ export async function fillEmptyCellsWithSpecies(
   }
 
   await flush()
+  if (created > 0) {
+    await adjustFieldTreeStats(farmId, fieldId, created, [
+      { species, delta: created },
+    ])
+  }
   return created
 }
-
-/** Aktif ağaçların çeşidini toplu günceller. */
 export async function bulkUpdateTreeSpecies(
   farmId: string,
   fieldId: string,
@@ -305,10 +346,17 @@ export async function bulkUpdateTreeSpecies(
     return 0
   }
 
+  const prevSnaps = await Promise.all(
+    treeIds.map((id) =>
+      getDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', id)),
+    ),
+  )
+
   const now = new Date().toISOString()
   let batch = writeBatch(db)
   let ops = 0
   let updated = 0
+  const speciesDeltas = new Map<string, number>()
 
   async function flush() {
     if (ops === 0) return
@@ -317,8 +365,29 @@ export async function bulkUpdateTreeSpecies(
     ops = 0
   }
 
-  for (const treeId of treeIds) {
-    const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
+  for (const snap of prevSnaps) {
+    if (!snap.exists()) continue
+    const prev = mapTree(snap.id, snap.data())
+    if (prev.status !== 'active') {
+      const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', snap.id)
+      batch.update(ref, {
+        species: trimmed,
+        updatedAt: serverTimestamp(),
+        updatedAtIso: now,
+      })
+      ops += 1
+      updated += 1
+      if (ops >= BATCH_LIMIT) await flush()
+      continue
+    }
+    const oldSpecies = prev.species?.trim() || ''
+    if (oldSpecies !== trimmed) {
+      if (oldSpecies) {
+        speciesDeltas.set(oldSpecies, (speciesDeltas.get(oldSpecies) ?? 0) - 1)
+      }
+      speciesDeltas.set(trimmed, (speciesDeltas.get(trimmed) ?? 0) + 1)
+    }
+    const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', snap.id)
     batch.update(ref, {
       species: trimmed,
       updatedAt: serverTimestamp(),
@@ -332,6 +401,12 @@ export async function bulkUpdateTreeSpecies(
   }
 
   await flush()
+  await adjustFieldTreeStats(
+    farmId,
+    fieldId,
+    0,
+    [...speciesDeltas.entries()].map(([s, delta]) => ({ species: s, delta })),
+  )
   return updated
 }
 
@@ -369,9 +444,22 @@ export async function bulkUpdateTreeDetails(
   data.updatedAt = serverTimestamp()
   data.updatedAtIso = now
 
+  const speciesChanging = 'species' in patch
+  const nextSpecies = speciesChanging
+    ? String(patch.species ?? '').trim()
+    : ''
+  const prevSnaps = speciesChanging
+    ? await Promise.all(
+        treeIds.map((id) =>
+          getDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', id)),
+        ),
+      )
+    : []
+
   let batch = writeBatch(db)
   let ops = 0
   let updated = 0
+  const speciesDeltas = new Map<string, number>()
 
   async function flush() {
     if (ops === 0) return
@@ -380,17 +468,59 @@ export async function bulkUpdateTreeDetails(
     ops = 0
   }
 
-  for (const treeId of treeIds) {
-    const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
-    batch.update(ref, data)
-    ops += 1
-    updated += 1
-    if (ops >= BATCH_LIMIT) {
-      await flush()
+  if (speciesChanging) {
+    for (const snap of prevSnaps) {
+      if (!snap.exists()) continue
+      const prev = mapTree(snap.id, snap.data())
+      if (prev.status === 'active') {
+        const oldSpecies = prev.species?.trim() || ''
+        if (oldSpecies !== nextSpecies) {
+          if (oldSpecies) {
+            speciesDeltas.set(
+              oldSpecies,
+              (speciesDeltas.get(oldSpecies) ?? 0) - 1,
+            )
+          }
+          if (nextSpecies) {
+            speciesDeltas.set(
+              nextSpecies,
+              (speciesDeltas.get(nextSpecies) ?? 0) + 1,
+            )
+          }
+        }
+      }
+      batch.update(
+        doc(db, 'farms', farmId, 'fields', fieldId, 'trees', snap.id),
+        data,
+      )
+      ops += 1
+      updated += 1
+      if (ops >= BATCH_LIMIT) await flush()
+    }
+  } else {
+    for (const treeId of treeIds) {
+      const ref = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
+      batch.update(ref, data)
+      ops += 1
+      updated += 1
+      if (ops >= BATCH_LIMIT) {
+        await flush()
+      }
     }
   }
 
   await flush()
+  if (speciesChanging) {
+    await adjustFieldTreeStats(
+      farmId,
+      fieldId,
+      0,
+      [...speciesDeltas.entries()].map(([s, delta]) => ({
+        species: s,
+        delta,
+      })),
+    )
+  }
   return updated
 }
 
@@ -449,6 +579,15 @@ export async function createTreesInCells(
   }
 
   await flush()
+  if (created > 0) {
+    const species = details.species?.trim() || ''
+    await adjustFieldTreeStats(
+      farmId,
+      fieldId,
+      created,
+      species ? [{ species, delta: created }] : undefined,
+    )
+  }
   return created
 }
 
@@ -458,12 +597,29 @@ export async function updateTreeStatus(
   treeId: string,
   status: TreeStatus,
 ): Promise<void> {
+  const treeRef = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
+  const prevSnap = await getDoc(treeRef)
+  const prev = prevSnap.exists() ? mapTree(treeId, prevSnap.data()) : null
   const now = new Date().toISOString()
-  await updateDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId), {
+  await updateDoc(treeRef, {
     status,
     updatedAt: serverTimestamp(),
     updatedAtIso: now,
   })
+  if (!prev || prev.status === status) return
+  const species = prev.species?.trim() || ''
+  const wasActive = prev.status === 'active'
+  const nowActive = status === 'active'
+  let deltaActive = 0
+  const deltas: { species: string; delta: number }[] = []
+  if (wasActive && !nowActive) {
+    deltaActive = -1
+    if (species) deltas.push({ species, delta: -1 })
+  } else if (!wasActive && nowActive) {
+    deltaActive = 1
+    if (species) deltas.push({ species, delta: 1 })
+  }
+  await adjustFieldTreeStats(farmId, fieldId, deltaActive, deltas)
 }
 
 export async function deleteTree(
@@ -471,7 +627,19 @@ export async function deleteTree(
   fieldId: string,
   treeId: string,
 ): Promise<void> {
-  await deleteDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId))
+  const treeRef = doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId)
+  const prevSnap = await getDoc(treeRef)
+  const prev = prevSnap.exists() ? mapTree(treeId, prevSnap.data()) : null
+  await deleteDoc(treeRef)
+  if (prev?.status === 'active') {
+    const species = prev.species?.trim() || ''
+    await adjustFieldTreeStats(
+      farmId,
+      fieldId,
+      -1,
+      species ? [{ species, delta: -1 }] : undefined,
+    )
+  }
 }
 
 /** Seçili ağaçları toplu siler. */
@@ -482,9 +650,17 @@ export async function bulkDeleteTrees(
 ): Promise<number> {
   if (treeIds.length === 0) return 0
 
+  const prevSnaps = await Promise.all(
+    treeIds.map((id) =>
+      getDoc(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', id)),
+    ),
+  )
+
   let batch = writeBatch(db)
   let ops = 0
   let deleted = 0
+  let deltaActive = 0
+  const speciesDeltas = new Map<string, number>()
 
   async function flush() {
     if (ops === 0) return
@@ -493,8 +669,17 @@ export async function bulkDeleteTrees(
     ops = 0
   }
 
-  for (const treeId of treeIds) {
-    batch.delete(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', treeId))
+  for (const snap of prevSnaps) {
+    if (!snap.exists()) continue
+    const prev = mapTree(snap.id, snap.data())
+    if (prev.status === 'active') {
+      deltaActive -= 1
+      const species = prev.species?.trim() || ''
+      if (species) {
+        speciesDeltas.set(species, (speciesDeltas.get(species) ?? 0) - 1)
+      }
+    }
+    batch.delete(doc(db, 'farms', farmId, 'fields', fieldId, 'trees', snap.id))
     ops += 1
     deleted += 1
     if (ops >= BATCH_LIMIT) {
@@ -503,6 +688,12 @@ export async function bulkDeleteTrees(
   }
 
   await flush()
+  await adjustFieldTreeStats(
+    farmId,
+    fieldId,
+    deltaActive,
+    [...speciesDeltas.entries()].map(([species, delta]) => ({ species, delta })),
+  )
   return deleted
 }
 

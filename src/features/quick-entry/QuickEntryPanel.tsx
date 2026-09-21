@@ -6,6 +6,10 @@ import {
   createFertilizeSchema,
 } from '../care/api'
 import {
+  createGeneralWork,
+  createGeneralWorkSchema,
+} from '../general-works/api'
+import {
   createHoeEvent,
   createHoeSchema,
 } from '../hoe/api'
@@ -14,6 +18,8 @@ import {
   createPesticideExpenseSchema,
 } from '../pesticide/api'
 import {
+  createHarvestEvent,
+  createHarvestSchema,
   createPlowEvent,
   createPlowSchema,
   PLOW_DIRECTION_LABELS,
@@ -25,7 +31,14 @@ import {
 import type { Field, PlowDirection } from '../../types'
 import { PLOW_EQUIPMENT_OPTIONS } from '../../types'
 
-type QuickOp = 'plow' | 'spray' | 'fertilize' | 'hoe' | 'prune'
+type QuickOp =
+  | 'plow'
+  | 'spray'
+  | 'fertilize'
+  | 'hoe'
+  | 'prune'
+  | 'harvest'
+  | 'general'
 
 const OP_LABELS: Record<QuickOp, string> = {
   plow: 'Sürüm',
@@ -33,6 +46,8 @@ const OP_LABELS: Record<QuickOp, string> = {
   fertilize: 'Gübreleme',
   hoe: 'Çapalama',
   prune: 'Budama',
+  harvest: 'Hasat',
+  general: 'Genel İşler',
 }
 
 const EQUIPMENT_OTHER = '__other__'
@@ -90,9 +105,28 @@ export function QuickEntryPanel({
   const [durationDays, setDurationDays] = useState(1)
   const [pruneNotes, setPruneNotes] = useState('')
 
+  // Hasat
+  const [harvestWorkers, setHarvestWorkers] = useState(0)
+  const [harvestWage, setHarvestWage] = useState(0)
+  const [harvestTotal, setHarvestTotal] = useState(0)
+  const [harvestTotalEdited, setHarvestTotalEdited] = useState(false)
+  const [estimatedKg, setEstimatedKg] = useState('')
+  const [harvestSpecies, setHarvestSpecies] = useState('')
+  const [harvestNotes, setHarvestNotes] = useState('')
+
+  // Genel işler
+  const [generalWork, setGeneralWork] = useState('')
+  const [generalCost, setGeneralCost] = useState(0)
+
   useEffect(() => {
     if (!totalEdited) setTotalPaid(workerCount * dailyWage)
   }, [workerCount, dailyWage, totalEdited])
+
+  useEffect(() => {
+    if (!harvestTotalEdited) {
+      setHarvestTotal(harvestWorkers * harvestWage)
+    }
+  }, [harvestWorkers, harvestWage, harvestTotalEdited])
 
   useEffect(() => {
     if (fields.length === 0) {
@@ -104,7 +138,48 @@ export function QuickEntryPanel({
     }
   }, [fields, fieldId])
 
+  useEffect(() => {
+    const field = fields.find((f) => f.id === fieldId)
+    if (field?.species?.trim()) {
+      setHarvestSpecies(field.species.trim())
+    }
+  }, [fieldId, fields])
+
   const selectedField = fields.find((f) => f.id === fieldId)
+
+  function resetEntries() {
+    setDoneAt(new Date().toISOString().slice(0, 10))
+    setDirection('enine')
+    setEquipmentChoice(PLOW_EQUIPMENT_OPTIONS[0])
+    setEquipmentOther('')
+    setPlowNotes('')
+    setPesticideName('')
+    setSprayCost(0)
+    setSprayNotes('')
+    setFertilizerType('')
+    setFertCost(0)
+    setFertNotes('')
+    setWorkerCount(1)
+    setDailyWage(0)
+    setTotalPaid(0)
+    setTotalEdited(false)
+    setHoeNotes('')
+    setPruneWorkers(1)
+    setForemanName('')
+    setForemanPhone('')
+    setPruneWage(0)
+    setDurationDays(1)
+    setPruneNotes('')
+    setHarvestWorkers(0)
+    setHarvestWage(0)
+    setHarvestTotal(0)
+    setHarvestTotalEdited(false)
+    setEstimatedKg('')
+    setHarvestSpecies(selectedField?.species?.trim() || '')
+    setHarvestNotes('')
+    setGeneralWork('')
+    setGeneralCost(0)
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -133,9 +208,7 @@ export function QuickEntryPanel({
       setSaving(true)
       try {
         await createPlowEvent(farmId, fieldId, parsed.data, userId)
-        setPlowNotes('')
-        setEquipmentOther('')
-        setEquipmentChoice(PLOW_EQUIPMENT_OPTIONS[0])
+        resetEntries()
         setInfo(
           `${selectedField.name}: ${PLOW_DIRECTION_LABELS[parsed.data.direction]} sürüm kaydı eklendi.`,
         )
@@ -162,9 +235,7 @@ export function QuickEntryPanel({
       setSaving(true)
       try {
         await createPesticideExpense(farmId, parsed.data, userId)
-        setPesticideName('')
-        setSprayCost(0)
-        setSprayNotes('')
+        resetEntries()
         setInfo(`${selectedField.name}: ilaçlama kaydı eklendi.`)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
@@ -188,9 +259,7 @@ export function QuickEntryPanel({
       setSaving(true)
       try {
         await createFertilizeEvent(farmId, fieldId, parsed.data, userId)
-        setFertilizerType('')
-        setFertCost(0)
-        setFertNotes('')
+        resetEntries()
         setInfo(`${selectedField.name}: gübreleme kaydı eklendi.`)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
@@ -215,11 +284,7 @@ export function QuickEntryPanel({
       setSaving(true)
       try {
         await createHoeEvent(farmId, fieldId, parsed.data, userId)
-        setWorkerCount(1)
-        setDailyWage(0)
-        setTotalPaid(0)
-        setTotalEdited(false)
-        setHoeNotes('')
+        resetEntries()
         setInfo(`${selectedField.name}: çapalama kaydı eklendi.`)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
@@ -229,14 +294,65 @@ export function QuickEntryPanel({
       return
     }
 
-    const parsed = createPruneSchema.safeParse({
+    if (op === 'prune') {
+      const parsed = createPruneSchema.safeParse({
+        doneAt,
+        workerCount: pruneWorkers,
+        foremanName,
+        foremanPhone,
+        dailyWage: pruneWage,
+        durationDays,
+        notes: pruneNotes || undefined,
+      })
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
+        return
+      }
+      setSaving(true)
+      try {
+        await createPruneEvent(farmId, fieldId, parsed.data, userId)
+        resetEntries()
+        setInfo(`${selectedField.name}: budama kaydı eklendi.`)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    if (op === 'harvest') {
+      const parsed = createHarvestSchema.safeParse({
+        doneAt,
+        workerCount: harvestWorkers,
+        dailyWage: harvestWage,
+        totalPaid: harvestTotal,
+        estimatedKg: estimatedKg === '' ? undefined : Number(estimatedKg),
+        species: harvestSpecies || undefined,
+        notes: harvestNotes || undefined,
+      })
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
+        return
+      }
+      setSaving(true)
+      try {
+        await createHarvestEvent(farmId, fieldId, parsed.data, userId)
+        resetEntries()
+        setInfo(`${selectedField.name}: hasat kaydı eklendi.`)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    const parsed = createGeneralWorkSchema.safeParse({
       doneAt,
-      workerCount: pruneWorkers,
-      foremanName,
-      foremanPhone,
-      dailyWage: pruneWage,
-      durationDays,
-      notes: pruneNotes || undefined,
+      work: generalWork,
+      cost: generalCost,
+      fieldId,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
@@ -244,14 +360,9 @@ export function QuickEntryPanel({
     }
     setSaving(true)
     try {
-      await createPruneEvent(farmId, fieldId, parsed.data, userId)
-      setPruneWorkers(1)
-      setForemanName('')
-      setForemanPhone('')
-      setPruneWage(0)
-      setDurationDays(1)
-      setPruneNotes('')
-      setInfo(`${selectedField.name}: budama kaydı eklendi.`)
+      await createGeneralWork(farmId, parsed.data, userId)
+      resetEntries()
+      setInfo(`${selectedField.name}: genel iş kaydı eklendi.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kayıt eklenemedi')
     } finally {
@@ -264,7 +375,6 @@ export function QuickEntryPanel({
       title="Hızlı Giriş"
       icon={<IconClipboard />}
       tone="sky"
-      defaultOpen
       bodyClassName="stack"
     >
       {fields.length === 0 ? (
@@ -551,6 +661,109 @@ export function QuickEntryPanel({
                     value={pruneNotes}
                     onChange={(e) => setPruneNotes(e.target.value)}
                     placeholder="Veri girmek için dokunun.."
+                  />
+                </label>
+              </>
+            )}
+
+            {op === 'harvest' && (
+              <>
+                <label>
+                  İşçi sayısı
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={harvestWorkers}
+                    onChange={(e) => {
+                      setHarvestTotalEdited(false)
+                      setHarvestWorkers(Number(e.target.value))
+                    }}
+                    required
+                  />
+                </label>
+                <label>
+                  Yevmiye
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={harvestWage}
+                    onChange={(e) => {
+                      setHarvestTotalEdited(false)
+                      setHarvestWage(Number(e.target.value))
+                    }}
+                    required
+                  />
+                </label>
+                <label>
+                  Toplam ödeme
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={harvestTotal}
+                    onChange={(e) => {
+                      setHarvestTotalEdited(true)
+                      setHarvestTotal(Number(e.target.value))
+                    }}
+                    required
+                  />
+                </label>
+                <label>
+                  Tahmini kilo
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={estimatedKg}
+                    onChange={(e) => setEstimatedKg(e.target.value)}
+                    placeholder="Veri girmek için dokunun.."
+                  />
+                </label>
+                <label>
+                  Çeşit
+                  <input
+                    value={harvestSpecies}
+                    onChange={(e) => setHarvestSpecies(e.target.value)}
+                    placeholder="Depoya işlenecek çeşit"
+                  />
+                </label>
+                <label className="span-2">
+                  Not
+                  <input
+                    value={harvestNotes}
+                    onChange={(e) => setHarvestNotes(e.target.value)}
+                    placeholder="Veri girmek için dokunun.."
+                  />
+                </label>
+                <p className="muted small span-2">
+                  Toplam ödeme varsayılan olarak işçi × yevmiye; istersen elle
+                  değiştirebilirsin. Kilo + çeşit girilirse ürün depoya eklenir.
+                </p>
+              </>
+            )}
+
+            {op === 'general' && (
+              <>
+                <label>
+                  İşlem
+                  <input
+                    value={generalWork}
+                    onChange={(e) => setGeneralWork(e.target.value)}
+                    placeholder="Veri girmek için dokunun.."
+                    required
+                  />
+                </label>
+                <label>
+                  Masraf (₺)
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={generalCost}
+                    onChange={(e) => setGeneralCost(Number(e.target.value))}
+                    required
                   />
                 </label>
               </>

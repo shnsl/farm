@@ -15,11 +15,12 @@ import {
   deleteField,
   subscribeFields,
 } from '../features/fields/api'
+import { backfillMissingTreeStats } from '../features/fields/treeStats'
 import { fieldColorClass, fieldColorOrder } from '../features/fields/fieldColor'
 import { FarmFuelPanel } from '../features/fuel/FarmFuelPanel'
+import { FarmGeneralWorksPanel } from '../features/general-works/FarmGeneralWorksPanel'
 import { FarmPesticidePanel } from '../features/pesticide/FarmPesticidePanel'
 import { QuickEntryPanel } from '../features/quick-entry/QuickEntryPanel'
-import { countActiveTreesByFields } from '../features/trees/api'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
 import type { Field } from '../types'
@@ -52,11 +53,14 @@ function sortFields(list: Field[], mode: FieldSortMode): Field[] {
   return copy
 }
 
+function activeCount(field: Field): number {
+  return field.activeTreeCount ?? 0
+}
+
 export function DashboardPage() {
   const { farmId, user } = useAuth()
   const [fields, setFields] = useState<Field[]>([])
-  const [treeCounts, setTreeCounts] = useState<Record<string, number>>({})
-  const [countsReady, setCountsReady] = useState(false)
+  const [backfillDone, setBackfillDone] = useState(false)
   const [plantedSort, setPlantedSort] = useState<FieldSortMode>(0)
   const [emptySort, setEmptySort] = useState<FieldSortMode>(0)
   const [error, setError] = useState<string | null>(null)
@@ -79,55 +83,52 @@ export function DashboardPage() {
     )
   }, [farmId])
 
-  const fieldIdsKey = useMemo(
-    () => fields.map((f) => f.id).join('|'),
-    [fields],
-  )
-
   useEffect(() => {
-    if (!farmId) return
-    let cancelled = false
-
-    if (fields.length === 0) {
-      setTreeCounts({})
-      setCountsReady(true)
+    if (!farmId || fields.length === 0) {
+      setBackfillDone(true)
       return
     }
-
-    void countActiveTreesByFields(farmId, fields)
-      .then((counts) => {
-        if (!cancelled) {
-          setTreeCounts(counts)
-          setCountsReady(true)
-        }
+    const missing = fields.filter(
+      (f) => f.activeTreeCount === undefined || f.speciesCounts === undefined,
+    )
+    if (missing.length === 0) {
+      setBackfillDone(true)
+      return
+    }
+    let cancelled = false
+    setBackfillDone(false)
+    void backfillMissingTreeStats(farmId, missing)
+      .then(() => {
+        if (!cancelled) setBackfillDone(true)
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(
-            err instanceof Error ? err.message : 'Ağaç sayıları yüklenemedi',
+            err instanceof Error ? err.message : 'Ağaç sayıları güncellenemedi',
           )
-          setCountsReady(true)
+          setBackfillDone(true)
         }
       })
     return () => {
       cancelled = true
     }
-    // fieldIdsKey: aynı tarla seti için tekrar yüklemeyi önler
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fields içerik referansı değil id seti
-  }, [farmId, fieldIdsKey])
+  }, [farmId, fields])
+
+  const countsReady =
+    backfillDone || fields.every((f) => f.activeTreeCount !== undefined)
 
   const { plantedFields, emptyFields } = useMemo(() => {
     const planted: Field[] = []
     const empty: Field[] = []
     for (const field of fields) {
-      if ((treeCounts[field.id] ?? 0) > 0) planted.push(field)
+      if (activeCount(field) > 0) planted.push(field)
       else empty.push(field)
     }
     return {
       plantedFields: sortFields(planted, plantedSort),
       emptyFields: sortFields(empty, emptySort),
     }
-  }, [fields, treeCounts, plantedSort, emptySort])
+  }, [fields, plantedSort, emptySort])
 
   async function onDeleteField(field: Field) {
     if (!farmId) return
@@ -205,7 +206,7 @@ export function DashboardPage() {
                     : null,
                   `${field.rowCount}×${field.colCount}`,
                   countsReady
-                    ? `${(treeCounts[field.id] ?? 0).toLocaleString('tr-TR')} ağaç`
+                    ? `${activeCount(field).toLocaleString('tr-TR')} ağaç`
                     : null,
                 ]
                   .filter(Boolean)
@@ -282,6 +283,10 @@ export function DashboardPage() {
 
       {farmId && user && (
         <QuickEntryPanel farmId={farmId} userId={user.uid} fields={fields} />
+      )}
+
+      {farmId && user && (
+        <FarmGeneralWorksPanel farmId={farmId} userId={user.uid} />
       )}
 
       <CollapseSection title="Yeni Tarla" icon={<IconPlus />} tone="teal">
@@ -384,7 +389,6 @@ export function DashboardPage() {
         title="Kayıtlı Tarlalar"
         icon={<IconTree />}
         tone="olive"
-        defaultOpen
         bodyClassName="stack"
       >
         {fields.length === 0 ? (
