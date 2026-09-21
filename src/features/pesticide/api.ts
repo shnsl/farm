@@ -33,6 +33,7 @@ export const createPesticideExpenseSchema = z.object({
   doneAt: z.string().trim().min(1, 'Tarih gerekli'),
   pesticideName: z.string().trim().max(80).optional(),
   cost: z.coerce.number().min(0, 'Masraf 0 veya daha büyük olmalı'),
+  fieldId: z.string().trim().min(1).optional(),
   notes: z.string().trim().max(500).optional(),
 })
 
@@ -65,6 +66,7 @@ function mapExpense(
   id: string,
   data: Record<string, unknown>,
 ): PesticideExpenseEvent {
+  const fieldId = data.fieldId ? String(data.fieldId).trim() : undefined
   return {
     id,
     doneAt: String(data.doneAt ?? ''),
@@ -72,6 +74,7 @@ function mapExpense(
       ? String(data.pesticideName)
       : undefined,
     cost: Number(data.cost ?? 0),
+    fieldId: fieldId || undefined,
     notes: data.notes ? String(data.notes) : undefined,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAtIso ?? ''),
@@ -172,6 +175,7 @@ export async function createPesticideExpense(
       doneAt: parsed.doneAt,
       pesticideName: parsed.pesticideName || null,
       cost: parsed.cost,
+      fieldId: parsed.fieldId || null,
       notes: parsed.notes || null,
       createdBy,
       createdAt: serverTimestamp(),
@@ -191,6 +195,7 @@ export async function updatePesticideExpense(
     doneAt: parsed.doneAt,
     pesticideName: parsed.pesticideName || null,
     cost: parsed.cost,
+    fieldId: parsed.fieldId || null,
     notes: parsed.notes || null,
   })
 }

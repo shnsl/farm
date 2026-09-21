@@ -195,7 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithPin = useCallback(async (pin: string) => {
     setError(null)
     if (!pinSchema.test(pin)) {
-      throw new Error('Şifreyi kontrol et')
+      // Uzunluk ipucu verme
+      throw new Error('Şifre hatalı')
     }
 
     // onAuthStateChanged oturumu kilitlemeden önce çalışmasın diye bayrağı önce koy
@@ -229,7 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (
         code === 'auth/wrong-password' ||
         code === 'auth/invalid-credential' ||
-        code === 'auth/invalid-login-credentials'
+        code === 'auth/invalid-login-credentials' ||
+        code === 'auth/user-not-found'
       ) {
         throw new Error('Şifre hatalı')
       }

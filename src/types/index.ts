@@ -223,7 +223,7 @@ export interface PesticideStockItem {
   createdAt: string
 }
 
-/** Yıllık ilaçlama masrafı kaydı (çiftlik geneli) */
+/** Yıllık ilaçlama masrafı kaydı (çiftlik geneli; isteğe bağlı tarla) */
 export interface PesticideExpenseEvent {
   id: string
   doneAt: string
@@ -231,6 +231,8 @@ export interface PesticideExpenseEvent {
   pesticideName?: string
   /** Masraf */
   cost: number
+  /** Hızlı giriş / tarlaya bağlı ilaçlama */
+  fieldId?: string
   notes?: string
   createdBy: string
   createdAt: string

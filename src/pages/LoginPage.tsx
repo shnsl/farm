@@ -31,8 +31,8 @@ export function LoginPage() {
     clearError()
     setFormError(null)
 
-    if (!/^\d{6}$/.test(pin)) {
-      setFormError('Şifreyi kontrol et')
+    if (!pin) {
+      setFormError('Şifre gerekli')
       return
     }
 
@@ -71,12 +71,10 @@ export function LoginPage() {
               type="password"
               inputMode="numeric"
               enterKeyHint="done"
-              autoComplete="one-time-code"
-              pattern="\d{6}"
-              maxLength={6}
+              autoComplete="current-password"
               value={pin}
               onChange={(e) => {
-                const next = e.target.value.replace(/\D/g, '').slice(0, 6)
+                const next = e.target.value.replace(/\D/g, '').slice(0, 64)
                 setPin(next)
               }}
               required
@@ -93,7 +91,7 @@ export function LoginPage() {
           <button
             className="btn primary"
             type="submit"
-            disabled={submitting || pin.length !== 6}
+            disabled={submitting || pin.length === 0}
           >
             {submitting ? 'Bekle…' : 'Giriş yap'}
           </button>

@@ -18,6 +18,7 @@ import {
 import { fieldColorClass, fieldColorOrder } from '../features/fields/fieldColor'
 import { FarmFuelPanel } from '../features/fuel/FarmFuelPanel'
 import { FarmPesticidePanel } from '../features/pesticide/FarmPesticidePanel'
+import { QuickEntryPanel } from '../features/quick-entry/QuickEntryPanel'
 import { countActiveTreesByFields } from '../features/trees/api'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
@@ -279,6 +280,10 @@ export function DashboardPage() {
         </p>
       )}
 
+      {farmId && user && (
+        <QuickEntryPanel farmId={farmId} userId={user.uid} fields={fields} />
+      )}
+
       <CollapseSection title="Yeni Tarla" icon={<IconPlus />} tone="teal">
         <form className="form-grid" onSubmit={onCreate}>
           <label>
@@ -368,7 +373,11 @@ export function DashboardPage() {
       )}
 
       {farmId && user && (
-        <FarmPesticidePanel farmId={farmId} userId={user.uid} />
+        <FarmPesticidePanel
+          farmId={farmId}
+          userId={user.uid}
+          fields={fields}
+        />
       )}
 
       <CollapseSection

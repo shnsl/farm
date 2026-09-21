@@ -8,7 +8,11 @@ import {
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconSpray, SectionTitle } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
-import type { PesticideExpenseEvent, PesticideStockItem } from '../../types'
+import type {
+  Field,
+  PesticideExpenseEvent,
+  PesticideStockItem,
+} from '../../types'
 import {
   createPesticideExpense,
   createPesticideExpenseSchema,
@@ -26,6 +30,7 @@ import { YearlyPesticideChart } from './YearlyPesticideChart'
 interface FarmPesticidePanelProps {
   farmId: string
   userId: string
+  fields?: Field[]
 }
 
 const PREVIEW_LIMIT = 6
@@ -83,6 +88,7 @@ function Modal({
 export function FarmPesticidePanel({
   farmId,
   userId,
+  fields = [],
 }: FarmPesticidePanelProps) {
   const [stock, setStock] = useState<PesticideStockItem[]>([])
   const [expenses, setExpenses] = useState<PesticideExpenseEvent[]>([])
@@ -119,6 +125,9 @@ export function FarmPesticidePanel({
   const [editExpenseName, setEditExpenseName] = useState('')
   const [editExpenseCost, setEditExpenseCost] = useState(0)
   const [editExpenseNotes, setEditExpenseNotes] = useState('')
+  const [editExpenseFieldId, setEditExpenseFieldId] = useState<
+    string | undefined
+  >(undefined)
 
   const [stockModalOpen, setStockModalOpen] = useState(false)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
@@ -255,6 +264,7 @@ export function FarmPesticidePanel({
     setEditExpenseName(item.pesticideName ?? '')
     setEditExpenseCost(item.cost)
     setEditExpenseNotes(item.notes ?? '')
+    setEditExpenseFieldId(item.fieldId)
   }
 
   async function onSaveExpenseEdit(event: FormEvent) {
@@ -266,6 +276,7 @@ export function FarmPesticidePanel({
       doneAt: editExpenseAt,
       pesticideName: editExpenseName,
       cost: editExpenseCost,
+      fieldId: editExpenseFieldId,
       notes: editExpenseNotes,
     })
     if (!parsed.success) {
@@ -276,6 +287,7 @@ export function FarmPesticidePanel({
     try {
       await updatePesticideExpense(farmId, editingExpenseId, parsed.data)
       setEditingExpenseId(null)
+      setEditExpenseFieldId(undefined)
       setInfo('Masraf kaydı güncellendi.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Güncellenemedi')
@@ -479,10 +491,15 @@ export function FarmPesticidePanel({
       )
     }
 
+    const fieldName = item.fieldId
+      ? fields.find((f) => f.id === item.fieldId)?.name
+      : undefined
+
     return (
       <li key={item.id}>
         <span>
           {item.doneAt.slice(0, 10)}
+          {fieldName ? ` · ${fieldName}` : ''}
           {item.pesticideName ? ` · ${item.pesticideName}` : ''}
           {' · '}
           {formatMoney(item.cost)}
