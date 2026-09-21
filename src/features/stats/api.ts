@@ -43,6 +43,11 @@ function yearOf(doneAt: string): string | null {
   return /^\d{4}$/.test(y) ? y : null
 }
 
+function snapData(docSnap: { data: () => unknown }): Record<string, unknown> {
+  const raw = docSnap.data()
+  return (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+}
+
 type SpendKey =
   | 'fertilize'
   | 'prune'
@@ -198,7 +203,7 @@ export async function loadFarmStats(
     if (treesSnap) {
       let activeInField = 0
       for (const d of treesSnap.docs) {
-        const data = d.data()
+        const data = snapData(d)
         if (String(data.status ?? 'active') !== 'active') continue
         activeInField += 1
         const species = String(data.species ?? '').trim()
@@ -218,14 +223,14 @@ export async function loadFarmStats(
     }
 
     for (const d of fertSnap.docs) {
-      const data = d.data()
+      const data = snapData(d)
       const year = yearOf(String(data.doneAt ?? ''))
       if (!year) continue
       addSpend(spendMap, year, 'fertilize', Number(data.cost ?? 0))
     }
 
     for (const d of pruneSnap.docs) {
-      const data = d.data()
+      const data = snapData(d)
       const year = yearOf(String(data.doneAt ?? ''))
       if (!year) continue
       addSpend(
@@ -241,14 +246,14 @@ export async function loadFarmStats(
     }
 
     for (const d of harvestSnap.docs) {
-      const data = d.data()
+      const data = snapData(d)
       const year = yearOf(String(data.doneAt ?? ''))
       if (!year) continue
       addSpend(spendMap, year, 'harvest', Number(data.totalPaid ?? 0))
     }
 
     for (const d of hoeSnap.docs) {
-      const data = d.data()
+      const data = snapData(d)
       const year = yearOf(String(data.doneAt ?? ''))
       if (!year) continue
       addSpend(spendMap, year, 'hoe', Number(data.totalPaid ?? 0))
@@ -256,7 +261,7 @@ export async function loadFarmStats(
   }
 
   for (const d of fuelSnap.docs) {
-    const data = d.data()
+    const data = snapData(d)
     if (String(data.kind ?? 'purchase') === 'consumption') continue
     const year = yearOf(String(data.doneAt ?? data.purchasedAt ?? ''))
     if (!year) continue
@@ -270,14 +275,14 @@ export async function loadFarmStats(
   }
 
   for (const d of pesticideSnap.docs) {
-    const data = d.data()
+    const data = snapData(d)
     const year = yearOf(String(data.doneAt ?? ''))
     if (!year) continue
     addSpend(spendMap, year, 'pesticide', Number(data.cost ?? 0))
   }
 
   for (const d of generalSnap.docs) {
-    const data = d.data()
+    const data = snapData(d)
     const year = yearOf(String(data.doneAt ?? ''))
     if (!year) continue
     addSpend(spendMap, year, 'generalWork', Number(data.cost ?? 0))
