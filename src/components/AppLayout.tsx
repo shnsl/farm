@@ -6,7 +6,6 @@ import {
   IconFields,
   IconSearch,
   IconSettings,
-  IconTree,
 } from './Icons'
 
 export function AppLayout() {
@@ -25,9 +24,15 @@ export function AppLayout() {
       <header className="topbar">
         <Link to="/" className="brand">
           <span className="brand-mark">
-            <IconTree />
+            <img
+              className="brand-mark-icon"
+              src={`${import.meta.env.BASE_URL}favicon.png`}
+              alt=""
+              width={24}
+              height={24}
+            />
           </span>
-          Tarla
+          ORA
         </Link>
         <nav className="nav">
           <NavLink to="/" end>

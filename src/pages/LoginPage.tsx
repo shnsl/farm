@@ -58,7 +58,7 @@ export function LoginPage() {
             height={64}
           />
         </div>
-        <p className="eyebrow">Tarla ağaç takip</p>
+        <p className="eyebrow">ORA</p>
         <h1>Giriş yap</h1>
         <p className="muted">Şifreni gir.</p>
 
