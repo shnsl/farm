@@ -18,6 +18,7 @@ import {
   buildInstantFarmStats,
   loadFarmStats,
   type FarmStats,
+  type YearSpendStat,
 } from '../features/stats/api'
 import {
   FarmDepotPanel,
@@ -41,6 +42,24 @@ function formatInt(value: number): string {
 function formatPct(value: number): string {
   return `%${value.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`
 }
+
+const SPEND_SEGMENTS: {
+  key: Exclude<keyof YearSpendStat, 'year' | 'total'>
+  label: string
+  className: string
+}[] = [
+  { key: 'fertilize', label: 'Gübreleme', className: 'stats-spend-fertilize' },
+  { key: 'prune', label: 'Budama', className: 'stats-spend-prune' },
+  { key: 'harvest', label: 'Hasat', className: 'stats-spend-harvest' },
+  { key: 'hoe', label: 'Çapalama', className: 'stats-spend-hoe' },
+  { key: 'fuel', label: 'Yakıt', className: 'stats-spend-fuel' },
+  { key: 'pesticide', label: 'İlaçlama', className: 'stats-spend-pesticide' },
+  {
+    key: 'generalWork',
+    label: 'Genel İşler',
+    className: 'stats-spend-general',
+  },
+]
 
 export function StatsPage() {
   const { farmId, user } = useAuth()
@@ -129,7 +148,7 @@ export function StatsPage() {
             İstatistikler
           </PageTitle>
           <p className="muted">
-            Tüm tarlalardaki ağaç çeşitleri, dönüm ve yıllara göre harcamalar.
+            Tüm tarlalardaki ağaç çeşitleri, dönüm ve masraflar.
           </p>
         </div>
       </header>
@@ -292,32 +311,53 @@ export function StatsPage() {
           </CollapseSection>
 
           <CollapseSection
-            title="Yıllara Göre Harcama"
+            title="Masraflar"
             icon={<IconWallet />}
             tone="amber"
             bodyClassName="stack"
           >
             <p className="muted small">
               Gübreleme + Budama + Hasat + Çapalama + Yakıt + İlaçlama + Genel
-              İşler harcamaları.
+              İşler masrafları.
             </p>
             {spendLoading && display.byYear.length === 0 ? (
-              <p className="muted small">Harcamalar yükleniyor…</p>
+              <p className="muted small">Masraflar yükleniyor…</p>
             ) : display.byYear.length === 0 ? (
-              <p className="muted small">Henüz harcama kaydı yok.</p>
+              <p className="muted small">Henüz masraf kaydı yok.</p>
             ) : (
               <>
-                <ul className="stats-year-bars" aria-label="Yıllık harcama">
+                <p className="muted small harvest-chart-legend" aria-hidden>
+                  {SPEND_SEGMENTS.map((seg) => (
+                    <span key={seg.key}>
+                      <span
+                        className={`legend-swatch ${seg.className}`}
+                      />
+                      {seg.label}
+                    </span>
+                  ))}
+                </p>
+                <ul className="stats-year-bars" aria-label="Yıllık masraf">
                   {[...display.byYear].reverse().map((row) => (
                     <li key={row.year}>
                       <span className="stats-year-label">{row.year}</span>
-                      <span className="stats-year-track" aria-hidden>
-                        <span
-                          className="stats-year-fill"
-                          style={{
-                            width: `${(row.total / maxSpend) * 100}%`,
-                          }}
-                        />
+                      <span
+                        className="stats-year-track stats-year-track-stack"
+                        aria-hidden
+                      >
+                        {SPEND_SEGMENTS.map((seg) => {
+                          const value = row[seg.key]
+                          if (!value) return null
+                          return (
+                            <span
+                              key={seg.key}
+                              className={`stats-year-seg ${seg.className}`}
+                              style={{
+                                width: `${(value / maxSpend) * 100}%`,
+                              }}
+                              title={`${seg.label}: ${formatMoney(value)} ₺`}
+                            />
+                          )
+                        })}
                       </span>
                       <span className="stats-year-total">
                         <AnimatedNumber

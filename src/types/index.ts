@@ -132,7 +132,12 @@ export interface HarvestEvent {
   totalPaid: number
   /** Tahmini hasat edilen kilo */
   estimatedKg?: number
-  /** Ürün çeşidi (depoya giriş) */
+  /**
+   * Zeytin verimi: tane kg / verim = litre yağ.
+   * Örn. 1000 kg / 5 = 200 lt zeytinyağı.
+   */
+  verim?: number
+  /** Ürün çeşidi (depoya giriş; zeytinde Tane Zeytin) */
   species?: string
   notes?: string
   createdBy: string
@@ -256,10 +261,11 @@ export interface GeneralWorkEvent {
   createdAt: string
 }
 
-/** Depodaki ürün stoğu (çeşit bazında kilo) */
+/** Depodaki ürün stoğu (çeşit bazında miktar; kg veya lt) */
 export interface WarehouseStockItem {
   id: string
   species: string
+  /** Miktar: çoğu üründe kg; Zeytinyağı için litre */
   kg: number
   updatedAt: string
 }
@@ -269,10 +275,11 @@ export interface SaleEvent {
   id: string
   doneAt: string
   species: string
+  /** Satılan miktar (kg veya lt) */
   soldKg: number
-  /** Birim fiyat (₺/kg) */
+  /** Birim fiyat (₺/kg veya zeytinyağında ₺/teneke) */
   unitPrice: number
-  /** Kazanç (soldKg × unitPrice) */
+  /** Kazanç */
   earnings: number
   notes?: string
   createdBy: string

@@ -28,6 +28,14 @@ import {
   updateHarvestEvent,
 } from './api'
 import { YearlyHarvestChart } from './YearlyHarvestChart'
+import {
+  defaultHarvestSpecies,
+  HarvestSpeciesInput,
+} from '../warehouse/HarvestSpeciesInput'
+import {
+  isOliveTreeSpecies,
+  oliveOilLitersFromHarvest,
+} from '../warehouse/harvestProducts'
 import { confirmDelete } from '../../lib/confirmDelete'
 import type {
   HarvestEvent,
@@ -117,7 +125,10 @@ export function FieldPlowPanel({
   const [totalPaid, setTotalPaid] = useState(0)
   const [totalEdited, setTotalEdited] = useState(false)
   const [estimatedKg, setEstimatedKg] = useState('')
-  const [harvestSpecies, setHarvestSpecies] = useState(defaultSpecies)
+  const [harvestVerim, setHarvestVerim] = useState('')
+  const [harvestSpecies, setHarvestSpecies] = useState(() =>
+    defaultHarvestSpecies(defaultSpecies),
+  )
   const [harvestNotes, setHarvestNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -129,6 +140,7 @@ export function FieldPlowPanel({
   const [editTotal, setEditTotal] = useState(0)
   const [editTotalEdited, setEditTotalEdited] = useState(true)
   const [editKg, setEditKg] = useState('')
+  const [editVerim, setEditVerim] = useState('')
   const [editSpecies, setEditSpecies] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [plowModalOpen, setPlowModalOpen] = useState(false)
@@ -136,7 +148,7 @@ export function FieldPlowPanel({
   const [chartModalOpen, setChartModalOpen] = useState(false)
 
   useEffect(() => {
-    setHarvestSpecies((prev) => prev || defaultSpecies)
+    setHarvestSpecies(defaultHarvestSpecies(defaultSpecies))
   }, [defaultSpecies])
 
   useEffect(() => {
@@ -173,6 +185,14 @@ export function FieldPlowPanel({
     [plows, harvests],
   )
 
+  const isOliveField = isOliveTreeSpecies(defaultSpecies)
+  const harvestOilPreview = useMemo(() => {
+    if (!isOliveField) return 0
+    const kg = Number(estimatedKg)
+    const verim = Number(harvestVerim)
+    return oliveOilLitersFromHarvest(kg, verim)
+  }, [isOliveField, estimatedKg, harvestVerim])
+
   const harvestByYear = useMemo(() => {
     return [...harvests].sort((a, b) => b.doneAt.localeCompare(a.doneAt))
   }, [harvests])
@@ -185,7 +205,8 @@ export function FieldPlowPanel({
     setEditTotal(h.totalPaid)
     setEditTotalEdited(true)
     setEditKg(h.estimatedKg !== undefined ? String(h.estimatedKg) : '')
-    setEditSpecies(h.species ?? defaultSpecies)
+    setEditVerim(h.verim !== undefined ? String(h.verim) : '')
+    setEditSpecies(h.species ?? defaultHarvestSpecies(defaultSpecies))
     setEditNotes(h.notes ?? '')
     setError(null)
     setInfo(null)
@@ -238,6 +259,10 @@ export function FieldPlowPanel({
       dailyWage,
       totalPaid,
       estimatedKg: estimatedKg === '' ? undefined : Number(estimatedKg),
+      verim:
+        isOliveField && harvestVerim !== ''
+          ? Number(harvestVerim)
+          : undefined,
       species: harvestSpecies || undefined,
       notes: harvestNotes,
     })
@@ -250,12 +275,17 @@ export function FieldPlowPanel({
       await createHarvestEvent(farmId, fieldId, parsed.data, userId)
       setHarvestNotes('')
       setEstimatedKg('')
-      setHarvestSpecies(defaultSpecies)
+      setHarvestVerim('')
+      setHarvestSpecies(defaultHarvestSpecies(defaultSpecies))
       setWorkerCount(0)
       setDailyWage(0)
       setTotalPaid(0)
       setTotalEdited(false)
-      setInfo('Hasat kaydı eklendi; kilo depoya işlendi.')
+      setInfo(
+        isOliveField
+          ? 'Hasat kaydı eklendi; zeytinyağı depoya işlendi.'
+          : 'Hasat kaydı eklendi; kilo depoya işlendi.',
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hasat eklenemedi')
     } finally {
@@ -274,6 +304,8 @@ export function FieldPlowPanel({
       dailyWage: editWage,
       totalPaid: editTotal,
       estimatedKg: editKg === '' ? undefined : Number(editKg),
+      verim:
+        isOliveField && editVerim !== '' ? Number(editVerim) : undefined,
       species: editSpecies || undefined,
       notes: editNotes,
     })
@@ -333,6 +365,12 @@ export function FieldPlowPanel({
           {h.species ? ` · ${h.species}` : ''}
           {h.estimatedKg !== undefined
             ? ` · ~${formatMoney(h.estimatedKg)} kg`
+            : ''}
+          {h.verim !== undefined ? ` · verim ${formatMoney(h.verim)}` : ''}
+          {h.estimatedKg !== undefined &&
+          h.verim !== undefined &&
+          h.verim > 0
+            ? ` · ~${formatMoney(oliveOilLitersFromHarvest(h.estimatedKg, h.verim))} lt yağ`
             : ''}
           {h.notes ? ` · ${h.notes}` : ''}
         </span>
@@ -516,14 +554,31 @@ export function FieldPlowPanel({
               placeholder="Veri girmek için dokunun.."
             />
           </label>
-          <label>
-            Çeşit
-            <input
-              value={harvestSpecies}
-              onChange={(e) => setHarvestSpecies(e.target.value)}
-              placeholder="Depoya işlenecek çeşit"
-            />
-          </label>
+          {isOliveField && (
+            <label>
+              Verim
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={harvestVerim}
+                onChange={(e) => setHarvestVerim(e.target.value)}
+                placeholder="Örn. 5"
+                required={estimatedKg !== '' && Number(estimatedKg) > 0}
+              />
+            </label>
+          )}
+          <HarvestSpeciesInput
+            treeSpecies={defaultSpecies}
+            value={harvestSpecies}
+            onChange={setHarvestSpecies}
+          />
+          {isOliveField && harvestOilPreview > 0 && (
+            <p className="muted small span-2">
+              Yaklaşık yağ: {formatMoney(harvestOilPreview)} lt depoya
+              eklenecek (kg ÷ verim).
+            </p>
+          )}
           <label className="span-2">
             Not
             <input
@@ -534,7 +589,8 @@ export function FieldPlowPanel({
           </label>
           <p className="muted small span-2">
             Toplam ödeme varsayılan olarak işçi × yevmiye; istersen elle
-            değiştirebilirsin. Kilo + çeşit girilirse ürün depoya eklenir.
+            değiştirebilirsin. Fıstıkta kilo + çeşit depoya eklenir. Zeytinde
+            tane kg ÷ verim = litre yağ olarak depoya işlenir.
           </p>
           <button className="btn primary" type="submit" disabled={saving}>
             {saving ? 'Kaydediliyor…' : 'Hasat ekle'}
@@ -559,6 +615,8 @@ export function FieldPlowPanel({
                   <th>Toplam ödeme</th>
                   <th>Çeşit</th>
                   <th>Tahmini kg</th>
+                  {isOliveField && <th>Verim</th>}
+                  {isOliveField && <th>Yağ (lt)</th>}
                   <th></th>
                 </tr>
               </thead>
@@ -566,7 +624,7 @@ export function FieldPlowPanel({
                 {harvestByYear.map((h) =>
                   editingHarvestId === h.id ? (
                     <tr key={h.id} className="harvest-edit-row">
-                      <td colSpan={8}>
+                      <td colSpan={isOliveField ? 10 : 8}>
                         <form
                           className="form-grid harvest-edit-form"
                           onSubmit={onSaveHarvestEdit}
@@ -622,14 +680,12 @@ export function FieldPlowPanel({
                               required
                             />
                           </label>
-                          <label>
-                            Çeşit
-                            <input
-                              value={editSpecies}
-                              onChange={(e) => setEditSpecies(e.target.value)}
-                              placeholder="Depoya işlenecek çeşit"
-                            />
-                          </label>
+                          <HarvestSpeciesInput
+                            treeSpecies={defaultSpecies}
+                            value={editSpecies}
+                            onChange={setEditSpecies}
+                            allowExtraValue
+                          />
                           <label>
                             Tahmini kg
                             <input
@@ -640,6 +696,18 @@ export function FieldPlowPanel({
                               onChange={(e) => setEditKg(e.target.value)}
                             />
                           </label>
+                          {isOliveField && (
+                            <label>
+                              Verim
+                              <input
+                                type="number"
+                                min={0.01}
+                                step={0.01}
+                                value={editVerim}
+                                onChange={(e) => setEditVerim(e.target.value)}
+                              />
+                            </label>
+                          )}
                           <label className="span-2">
                             Not
                             <input
@@ -679,6 +747,25 @@ export function FieldPlowPanel({
                           ? formatMoney(h.estimatedKg)
                           : '—'}
                       </td>
+                      {isOliveField && (
+                        <td>
+                          {h.verim !== undefined ? formatMoney(h.verim) : '—'}
+                        </td>
+                      )}
+                      {isOliveField && (
+                        <td>
+                          {h.estimatedKg !== undefined &&
+                          h.verim !== undefined &&
+                          h.verim > 0
+                            ? formatMoney(
+                                oliveOilLitersFromHarvest(
+                                  h.estimatedKg,
+                                  h.verim,
+                                ),
+                              )
+                            : '—'}
+                        </td>
+                      )}
                       <td>
                         <div className="table-row-actions">
                           <button

@@ -6,16 +6,25 @@ import {
   type ReactNode,
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
-import { IconArea, IconWallet } from '../../components/Icons'
+import { IconArea, IconTrash, IconWallet } from '../../components/Icons'
 import type { SaleEvent, WarehouseStockItem } from '../../types'
 import {
   createSale,
   createSaleSchema,
   deleteSale,
+  deleteWarehouseStock,
+  ensureFistikWarehouseSplit,
   saleEarnings,
   subscribeSales,
   subscribeWarehouseStock,
 } from './api'
+import {
+  formatStockAmount,
+  isOliveOilStock,
+  splitOliveOilTeneke,
+  TENEKE_LITERS,
+  tenekeToLiters,
+} from './harvestProducts'
 
 interface FarmDepotPanelProps {
   farmId: string
@@ -26,8 +35,18 @@ function formatMoney(value: number): string {
   return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
 }
 
-function formatKg(value: number): string {
+function formatQty(value: number): string {
   return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+}
+
+function formatSaleLine(
+  item: Pick<SaleEvent, 'species' | 'soldKg' | 'unitPrice' | 'earnings'>,
+): string {
+  if (isOliveOilStock(item.species)) {
+    const soldTeneke = item.soldKg / TENEKE_LITERS
+    return `${formatQty(soldTeneke)} teneke · ${formatMoney(item.unitPrice)} ₺/teneke · ${formatMoney(item.earnings)} ₺`
+  }
+  return `${formatQty(item.soldKg)} kg · ${formatMoney(item.unitPrice)} ₺/kg · ${formatMoney(item.earnings)} ₺`
 }
 
 function Modal({
@@ -82,9 +101,12 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     () => new Date().toISOString().slice(0, 10),
   )
   const [species, setSpecies] = useState('')
-  const [soldKg, setSoldKg] = useState(0)
+  const [soldQty, setSoldQty] = useState(0)
   const [unitPrice, setUnitPrice] = useState(0)
   const [notes, setNotes] = useState('')
+  const [pendingDeleteStock, setPendingDeleteStock] =
+    useState<WarehouseStockItem | null>(null)
+  const [deletingStock, setDeletingStock] = useState(false)
 
   useEffect(() => {
     return subscribeWarehouseStock(
@@ -94,13 +116,42 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     )
   }, [farmId])
 
+  useEffect(() => {
+    let cancelled = false
+    void ensureFistikWarehouseSplit(farmId).catch((err: unknown) => {
+      if (!cancelled) {
+        console.error(err)
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Fıstık depo ayrımı uygulanamadı',
+        )
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [farmId])
+
   const available = useMemo(
-    () => stock.filter((s) => s.kg > 0).sort((a, b) => a.species.localeCompare(b.species, 'tr')),
+    () =>
+      stock
+        .filter((s) => s.kg > 0)
+        .sort((a, b) => a.species.localeCompare(b.species, 'tr')),
     [stock],
   )
 
   const selectedStock = available.find((s) => s.species === species)
-  const earningsPreview = saleEarnings({ soldKg, unitPrice })
+  const sellingOil = isOliveOilStock(species)
+  const oilStock = sellingOil
+    ? splitOliveOilTeneke(selectedStock?.kg ?? 0)
+    : null
+  const soldLitersOrKg = sellingOil ? tenekeToLiters(soldQty) : soldQty
+  const earningsPreview = saleEarnings({
+    soldKg: soldLitersOrKg,
+    unitPrice,
+    species,
+  })
 
   useEffect(() => {
     if (available.length === 0) {
@@ -116,6 +167,8 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     event.preventDefault()
     setError(null)
     setInfo(null)
+
+    const soldKg = sellingOil ? tenekeToLiters(soldQty) : soldQty
     const parsed = createSaleSchema.safeParse({
       doneAt,
       species,
@@ -127,16 +180,24 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
       setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
       return
     }
+    if (sellingOil && oilStock && soldQty > oilStock.teneke) {
+      setError(
+        `Depoda yalnızca ${oilStock.teneke} teneke satılabilir (kalan ${formatQty(oilStock.remainderLt)} lt teneke doldurmuyor)`,
+      )
+      return
+    }
     if (selectedStock && parsed.data.soldKg > selectedStock.kg + 0.001) {
       setError(
-        `Depoda yalnızca ${formatKg(selectedStock.kg)} kg “${selectedStock.species}” var`,
+        sellingOil
+          ? `Depoda yalnızca ${formatQty(oilStock?.teneke ?? 0)} teneke “${selectedStock.species}” var`
+          : `Depoda yalnızca ${formatQty(selectedStock.kg)} kg “${selectedStock.species}” var`,
       )
       return
     }
     setSaving(true)
     try {
       await createSale(farmId, parsed.data, userId)
-      setSoldKg(0)
+      setSoldQty(0)
       setUnitPrice(0)
       setNotes('')
       setInfo('Satış kaydedildi; stok güncellendi.')
@@ -144,6 +205,21 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
       setError(err instanceof Error ? err.message : 'Satış kaydedilemedi')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function confirmDeleteStock() {
+    if (!pendingDeleteStock) return
+    setDeletingStock(true)
+    setError(null)
+    try {
+      await deleteWarehouseStock(farmId, pendingDeleteStock.id)
+      setInfo(`“${pendingDeleteStock.species}” depodan silindi.`)
+      setPendingDeleteStock(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Stok silinemedi')
+    } finally {
+      setDeletingStock(false)
     }
   }
 
@@ -162,8 +238,9 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
       {info && <p className="success">{info}</p>}
 
       <p className="muted small">
-        Hasattan girilen ürünler çeşit bazında burada birikir. Satış işlemini bu
-        alandan yap.
+        Hasattan girilen ürünler çeşit bazında burada birikir. Zeytinyağı hasat
+        kaydındaki tane kg ÷ verim ile litredir; depoda aşağı yuvarlanmış teneke
+        + kalan lt ve toplam lt gösterilir (1 teneke = {TENEKE_LITERS} lt).
       </p>
 
       {available.length === 0 ? (
@@ -174,19 +251,69 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
             <thead>
               <tr>
                 <th>Çeşit</th>
-                <th>Stok (kg)</th>
+                <th>Stok</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {available.map((item) => (
                 <tr key={item.id}>
                   <td>{item.species}</td>
-                  <td>{formatKg(item.kg)}</td>
+                  <td>{formatStockAmount(item.species, item.kg)}</td>
+                  <td>
+                    <div className="table-row-actions">
+                      <button
+                        type="button"
+                        className="btn ghost btn-icon"
+                        aria-label={`${item.species} sil`}
+                        title="Sil"
+                        onClick={() => setPendingDeleteStock(item)}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {pendingDeleteStock && (
+        <Modal
+          title="Depo ürünü silinsin mi?"
+          onClose={() => setPendingDeleteStock(null)}
+        >
+          <div className="stack">
+            <p>
+              {pendingDeleteStock.species} ·{' '}
+              {formatStockAmount(
+                pendingDeleteStock.species,
+                pendingDeleteStock.kg,
+              )}
+            </p>
+            <p className="muted small">Bu işlem geri alınamaz.</p>
+            <div className="bulk-actions">
+              <button
+                type="button"
+                className="btn danger"
+                disabled={deletingStock}
+                onClick={() => void confirmDeleteStock()}
+              >
+                {deletingStock ? 'Siliniyor…' : 'Sil'}
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={deletingStock}
+                onClick={() => setPendingDeleteStock(null)}
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {available.length > 0 && (
@@ -204,42 +331,77 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
             Çeşit
             <select
               value={species}
-              onChange={(e) => setSpecies(e.target.value)}
+              onChange={(e) => {
+                setSpecies(e.target.value)
+                setSoldQty(0)
+              }}
               required
             >
               {available.map((item) => (
                 <option key={item.id} value={item.species}>
-                  {item.species} ({formatKg(item.kg)} kg)
+                  {item.species} ({formatStockAmount(item.species, item.kg)})
                 </option>
               ))}
             </select>
           </label>
-          <label>
-            Satılan kilo
-            <input
-              type="number"
-              min={0.01}
-              step={0.01}
-              value={soldKg}
-              onChange={(e) => setSoldKg(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label>
-            Birim fiyat (₺/kg)
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(Number(e.target.value))}
-              required
-            />
-          </label>
+          {sellingOil ? (
+            <>
+              <label>
+                Satılan teneke
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={soldQty || ''}
+                  onChange={(e) => setSoldQty(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label>
+                Birim fiyat (₺/teneke)
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(Number(e.target.value))}
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                Satılan kilo
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={soldQty || ''}
+                  onChange={(e) => setSoldQty(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label>
+                Birim fiyat (₺/kg)
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(Number(e.target.value))}
+                  required
+                />
+              </label>
+            </>
+          )}
           <p className="muted small span-2">
-            Kazanç: {formatMoney(earningsPreview)} ₺
+            Satış: {formatMoney(earningsPreview)} ₺
             {selectedStock
-              ? ` · depoda ${formatKg(selectedStock.kg)} kg`
+              ? ` · depoda ${formatStockAmount(selectedStock.species, selectedStock.kg)}`
+              : ''}
+            {sellingOil && soldQty > 0
+              ? ` · ${formatQty(tenekeToLiters(soldQty))} lt`
               : ''}
           </p>
           <label className="span-2">
@@ -306,7 +468,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
 
   return (
     <CollapseSection
-      title="Kazançlar"
+      title="Satışlar"
       icon={<IconWallet />}
       tone="amber"
       bodyClassName="stack"
@@ -318,7 +480,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
       )}
 
       <div className="info-summary stack">
-        <strong>Toplam kazanç</strong>
+        <strong>Toplam satış</strong>
         <p>{formatMoney(totalEarnings)} ₺</p>
       </div>
 
@@ -328,7 +490,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
             <thead>
               <tr>
                 <th>Yıl</th>
-                <th>Kazanç (₺)</th>
+                <th>Satış (₺)</th>
               </tr>
             </thead>
             <tbody>
@@ -344,15 +506,14 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
       )}
 
       {sales.length === 0 ? (
-        <p className="muted small">Henüz satış / kazanç kaydı yok.</p>
+        <p className="muted small">Henüz satış kaydı yok.</p>
       ) : (
         <ul className="stack-gap">
           {sales.slice(0, 12).map((item) => (
             <li key={item.id}>
               <span>
                 {item.doneAt.slice(0, 10)} · {item.species} ·{' '}
-                {formatKg(item.soldKg)} kg · {formatMoney(item.unitPrice)} ₺/kg
-                · {formatMoney(item.earnings)} ₺
+                {formatSaleLine(item)}
                 {item.notes ? ` · ${item.notes}` : ''}
               </span>
               <div className="bulk-actions">
@@ -374,8 +535,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
           <div className="stack">
             <p>
               {pendingDelete.doneAt.slice(0, 10)} · {pendingDelete.species} ·{' '}
-              {formatKg(pendingDelete.soldKg)} kg ·{' '}
-              {formatMoney(pendingDelete.earnings)} ₺
+              {formatSaleLine(pendingDelete)}
             </p>
             <p className="muted small">
               Silinen miktar depoya geri eklensin mi?

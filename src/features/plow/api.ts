@@ -19,6 +19,10 @@ import type {
   PlowEvent,
 } from '../../types'
 import { adjustWarehouseStock } from '../warehouse/api'
+import {
+  isOliveFruitHarvest,
+  warehouseDeltaFromHarvest,
+} from '../warehouse/harvestProducts'
 
 export const PLOW_DIRECTION_LABELS: Record<PlowDirection, string> = {
   enine: 'Enine',
@@ -47,6 +51,7 @@ export const createHarvestSchema = z
       .number()
       .min(0, 'Tahmini kilo 0 veya daha büyük olmalı')
       .optional(),
+    verim: z.coerce.number().positive('Verim 0’dan büyük olmalı').optional(),
     species: z.string().trim().max(80).optional(),
     notes: z.string().trim().max(500).optional(),
   })
@@ -56,6 +61,17 @@ export const createHarvestSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Kilo girildiyse çeşit gerekli',
         path: ['species'],
+      })
+    }
+    if (
+      isOliveFruitHarvest(data.species) &&
+      (data.estimatedKg ?? 0) > 0 &&
+      !(data.verim && data.verim > 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Zeytin hasadında verim gerekli (kg ÷ verim = lt yağ)',
+        path: ['verim'],
       })
     }
   })
@@ -91,11 +107,24 @@ function mapHarvest(id: string, data: Record<string, unknown>): HarvestEvent {
     dailyWage: Number(data.dailyWage ?? 0),
     totalPaid: Number(data.totalPaid ?? 0),
     estimatedKg: optionalNumber(data.estimatedKg),
+    verim: optionalNumber(data.verim),
     species: species || undefined,
     notes: data.notes ? String(data.notes) : undefined,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAtIso ?? ''),
   }
+}
+
+async function applyHarvestWarehouseDelta(
+  farmId: string,
+  species: string | null | undefined,
+  kg: number,
+  verim: number | null | undefined,
+  sign: 1 | -1,
+): Promise<void> {
+  const delta = warehouseDeltaFromHarvest(species, kg, verim)
+  if (!delta) return
+  await adjustWarehouseStock(farmId, delta.species, sign * delta.delta)
 }
 
 export function subscribePlowEvents(
@@ -165,10 +194,9 @@ export async function createHarvestEvent(
   const now = new Date().toISOString()
   const kg = parsed.estimatedKg ?? 0
   const species = parsed.species?.trim() || ''
+  const verim = parsed.verim
 
-  if (kg > 0 && species) {
-    await adjustWarehouseStock(farmId, species, kg)
-  }
+  await applyHarvestWarehouseDelta(farmId, species, kg, verim, 1)
 
   try {
     const ref = await addDoc(
@@ -179,6 +207,7 @@ export async function createHarvestEvent(
         dailyWage: parsed.dailyWage,
         totalPaid: parsed.totalPaid,
         estimatedKg: parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
+        verim: verim === undefined ? null : verim,
         species: species || null,
         notes: parsed.notes || null,
         createdBy,
@@ -188,9 +217,7 @@ export async function createHarvestEvent(
     )
     return ref.id
   } catch (err) {
-    if (kg > 0 && species) {
-      await adjustWarehouseStock(farmId, species, -kg)
-    }
+    await applyHarvestWarehouseDelta(farmId, species, kg, verim, -1)
     throw err
   }
 }
@@ -208,20 +235,16 @@ export async function updateHarvestEvent(
 
   const oldKg = prev?.estimatedKg ?? 0
   const oldSpecies = prev?.species?.trim() || ''
+  const oldVerim = prev?.verim
   const newKg = parsed.estimatedKg ?? 0
   const newSpecies = parsed.species?.trim() || ''
+  const newVerim = parsed.verim
 
-  if (oldKg > 0 && oldSpecies) {
-    await adjustWarehouseStock(farmId, oldSpecies, -oldKg)
-  }
+  await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, -1)
   try {
-    if (newKg > 0 && newSpecies) {
-      await adjustWarehouseStock(farmId, newSpecies, newKg)
-    }
+    await applyHarvestWarehouseDelta(farmId, newSpecies, newKg, newVerim, 1)
   } catch (err) {
-    if (oldKg > 0 && oldSpecies) {
-      await adjustWarehouseStock(farmId, oldSpecies, oldKg)
-    }
+    await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, 1)
     throw err
   }
 
@@ -232,16 +255,13 @@ export async function updateHarvestEvent(
       dailyWage: parsed.dailyWage,
       totalPaid: parsed.totalPaid,
       estimatedKg: parsed.estimatedKg === undefined ? null : parsed.estimatedKg,
+      verim: newVerim === undefined ? null : newVerim,
       species: newSpecies || null,
       notes: parsed.notes || null,
     })
   } catch (err) {
-    if (newKg > 0 && newSpecies) {
-      await adjustWarehouseStock(farmId, newSpecies, -newKg)
-    }
-    if (oldKg > 0 && oldSpecies) {
-      await adjustWarehouseStock(farmId, oldSpecies, oldKg)
-    }
+    await applyHarvestWarehouseDelta(farmId, newSpecies, newKg, newVerim, -1)
+    await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, 1)
     throw err
   }
 }
@@ -265,11 +285,13 @@ export async function deleteHarvestEvent(
   const snap = await getDoc(ref)
   if (snap.exists()) {
     const h = mapHarvest(eventId, snap.data())
-    const kg = h.estimatedKg ?? 0
-    const species = h.species?.trim() || ''
-    if (kg > 0 && species) {
-      await adjustWarehouseStock(farmId, species, -kg)
-    }
+    await applyHarvestWarehouseDelta(
+      farmId,
+      h.species,
+      h.estimatedKg ?? 0,
+      h.verim,
+      -1,
+    )
   }
   await deleteDoc(ref)
 }

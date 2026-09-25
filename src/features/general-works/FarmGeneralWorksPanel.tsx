@@ -3,9 +3,14 @@ import {
   useMemo,
   useState,
   type FormEvent,
+  type ReactNode,
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
-import { IconNotebook } from '../../components/Icons'
+import {
+  IconNotebook,
+  IconPencil,
+  IconTrash,
+} from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
 import type { GeneralWorkEvent } from '../../types'
 import {
@@ -21,10 +26,52 @@ interface FarmGeneralWorksPanelProps {
   userId: string
 }
 
-const PREVIEW_LIMIT = 6
+const PREVIEW_LIMIT = 3
 
 function formatMoney(value: number): string {
   return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button
+            type="button"
+            className="btn ghost btn-compact"
+            onClick={onClose}
+          >
+            Kapat
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  )
 }
 
 export function FarmGeneralWorksPanel({
@@ -35,6 +82,7 @@ export function FarmGeneralWorksPanel({
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
 
   const [doneAt, setDoneAt] = useState(
     () => new Date().toISOString().slice(0, 10),
@@ -122,6 +170,19 @@ export function FarmGeneralWorksPanel({
     }
   }
 
+  function onDelete(item: GeneralWorkEvent) {
+    if (
+      !confirmDelete(
+        'Bu genel iş kaydı silinsin mi? Bu işlem geri alınamaz.',
+      )
+    ) {
+      return
+    }
+    void deleteGeneralWork(farmId, item.id).catch((err) =>
+      setError(err instanceof Error ? err.message : 'Silinemedi'),
+    )
+  }
+
   function renderItem(item: GeneralWorkEvent) {
     if (editingId === item.id) {
       return (
@@ -174,37 +235,30 @@ export function FarmGeneralWorksPanel({
     }
 
     return (
-      <li key={item.id}>
-        <span>
-          {item.doneAt.slice(0, 10)} · {item.work} · {formatMoney(item.cost)}
+      <li key={item.id} className="list-row-actions">
+        <span className="list-row-actions-main">
+          {item.doneAt.slice(0, 10)} · {item.work} · {formatMoney(item.cost)} ₺
         </span>
-        <div className="bulk-actions">
+        <div className="table-row-actions">
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
+            aria-label="Düzenle"
+            title="Düzenle"
             onClick={() => startEdit(item)}
           >
-            Düzenle
+            <IconPencil />
           </button>
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
-            onClick={() => {
-              if (
-                !confirmDelete(
-                  'Bu genel iş kaydı silinsin mi? Bu işlem geri alınamaz.',
-                )
-              ) {
-                return
-              }
-              void deleteGeneralWork(farmId, item.id).catch((err) =>
-                setError(err instanceof Error ? err.message : 'Silinemedi'),
-              )
-            }}
+            aria-label="Sil"
+            title="Sil"
+            onClick={() => onDelete(item)}
           >
-            Sil
+            <IconTrash />
           </button>
         </div>
       </li>
@@ -268,12 +322,24 @@ export function FarmGeneralWorksPanel({
       {events.length === 0 ? (
         <p className="muted small">Henüz genel iş kaydı yok.</p>
       ) : (
-        <ul className="stack-gap">{preview.map(renderItem)}</ul>
+        <>
+          <ul className="stack-gap">{preview.map(renderItem)}</ul>
+          {events.length > PREVIEW_LIMIT && (
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setListOpen(true)}
+            >
+              Tümünü gör ({events.length})
+            </button>
+          )}
+        </>
       )}
-      {events.length > PREVIEW_LIMIT && (
-        <p className="muted small">
-          Son {PREVIEW_LIMIT} kayıt gösteriliyor ({events.length} toplam).
-        </p>
+
+      {listOpen && (
+        <Modal title="Tüm genel işler" onClose={() => setListOpen(false)}>
+          <ul className="stack-gap">{events.map(renderItem)}</ul>
+        </Modal>
       )}
     </CollapseSection>
   )

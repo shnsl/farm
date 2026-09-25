@@ -9,6 +9,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   type Unsubscribe,
@@ -16,6 +17,14 @@ import {
 import { z } from 'zod'
 import { db } from '../../lib/firebase'
 import type { SaleEvent, WarehouseStockItem } from '../../types'
+import {
+  BEN_FISTIK,
+  BOZ_FISTIK,
+  isOliveOilStock,
+  isPlainFistikStock,
+  litersToTeneke,
+  stockUnitLabel,
+} from './harvestProducts'
 
 export const createSaleSchema = z.object({
   doneAt: z.string().trim().min(1, 'Tarih gerekli'),
@@ -30,7 +39,12 @@ export type CreateSaleInput = z.infer<typeof createSaleSchema>
 export function saleEarnings(input: {
   soldKg: number
   unitPrice: number
+  species?: string
 }): number {
+  if (isOliveOilStock(input.species)) {
+    const teneke = litersToTeneke(input.soldKg)
+    return Number((teneke * input.unitPrice).toFixed(2))
+  }
   return Number((input.soldKg * input.unitPrice).toFixed(2))
 }
 
@@ -51,7 +65,7 @@ function mapSale(id: string, data: Record<string, unknown>): SaleEvent {
   const unitPrice = Number(data.unitPrice ?? 0)
   const stored = data.earnings !== undefined && data.earnings !== null
     ? Number(data.earnings)
-    : saleEarnings({ soldKg, unitPrice })
+    : saleEarnings({ soldKg, unitPrice, species: String(data.species ?? '') })
   return {
     id,
     doneAt: String(data.doneAt ?? ''),
@@ -135,8 +149,9 @@ export async function adjustWarehouseStock(
   const current = Number(snap.docs[0].data().kg ?? 0)
   const next = Number((current + deltaKg).toFixed(2))
   if (next < -0.001) {
+    const unit = stockUnitLabel(name)
     throw new Error(
-      `Depoda yeterli “${name}” yok (mevcut: ${current.toLocaleString('tr-TR')} kg)`,
+      `Depoda yeterli “${name}” yok (mevcut: ${current.toLocaleString('tr-TR')} ${unit})`,
     )
   }
   await updateDoc(ref, {
@@ -144,6 +159,75 @@ export async function adjustWarehouseStock(
     updatedAt: serverTimestamp(),
     updatedAtIso: now,
   })
+}
+
+/** Depo kilosunu mutlak değer olarak yazar (yoksa oluşturur). */
+export async function setWarehouseStockKg(
+  farmId: string,
+  species: string,
+  kg: number,
+): Promise<void> {
+  const name = species.trim()
+  if (!name) return
+  const nextKg = Math.max(0, Number(kg.toFixed(2)))
+  const now = new Date().toISOString()
+
+  const q = query(
+    collection(db, 'farms', farmId, 'warehouseStock'),
+    where('species', '==', name),
+  )
+  const snap = await getDocs(q)
+
+  if (snap.empty) {
+    if (nextKg <= 0) return
+    await addDoc(collection(db, 'farms', farmId, 'warehouseStock'), {
+      species: name,
+      kg: nextKg,
+      updatedAt: serverTimestamp(),
+      updatedAtIso: now,
+    })
+    return
+  }
+
+  await updateDoc(snap.docs[0].ref, {
+    kg: nextKg,
+    updatedAt: serverTimestamp(),
+    updatedAtIso: now,
+  })
+}
+
+/**
+ * Eski tek satır “Fıstık” stoğunu Boz (450 kg) + Ben (15 kg) olarak ayırır.
+ * Bir kez çalışır (farms/{id}/config/migrations).
+ */
+export async function ensureFistikWarehouseSplit(farmId: string): Promise<void> {
+  const flagRef = doc(db, 'farms', farmId, 'config', 'migrations')
+  const flagSnap = await getDoc(flagRef)
+  if (flagSnap.exists() && flagSnap.data()?.fistikHarvestSplit === true) {
+    return
+  }
+
+  const stockSnap = await getDocs(
+    collection(db, 'farms', farmId, 'warehouseStock'),
+  )
+  const plainDocs = stockSnap.docs.filter((d) =>
+    isPlainFistikStock(String(d.data().species ?? '')),
+  )
+
+  if (plainDocs.length > 0) {
+    await setWarehouseStockKg(farmId, BOZ_FISTIK, 450)
+    await setWarehouseStockKg(farmId, BEN_FISTIK, 15)
+    await Promise.all(plainDocs.map((d) => deleteDoc(d.ref)))
+  }
+
+  await setDoc(
+    flagRef,
+    {
+      fistikHarvestSplit: true,
+      fistikHarvestSplitAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
 }
 
 export async function createSale(
@@ -193,4 +277,12 @@ export async function deleteSale(
   if (restoreToDepot && species && soldKg) {
     await adjustWarehouseStock(farmId, species, soldKg)
   }
+}
+
+/** Yanlış eklenen depo satırını tamamen siler. */
+export async function deleteWarehouseStock(
+  farmId: string,
+  stockId: string,
+): Promise<void> {
+  await deleteDoc(doc(db, 'farms', farmId, 'warehouseStock', stockId))
 }

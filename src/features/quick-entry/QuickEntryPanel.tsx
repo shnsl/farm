@@ -28,6 +28,14 @@ import {
   createPruneEvent,
   createPruneSchema,
 } from '../prune/api'
+import {
+  defaultHarvestSpecies,
+  HarvestSpeciesInput,
+} from '../warehouse/HarvestSpeciesInput'
+import {
+  isOliveTreeSpecies,
+  oliveOilLitersFromHarvest,
+} from '../warehouse/harvestProducts'
 import type { Field, PlowDirection } from '../../types'
 import { PLOW_EQUIPMENT_OPTIONS } from '../../types'
 
@@ -111,6 +119,7 @@ export function QuickEntryPanel({
   const [harvestTotal, setHarvestTotal] = useState(0)
   const [harvestTotalEdited, setHarvestTotalEdited] = useState(false)
   const [estimatedKg, setEstimatedKg] = useState('')
+  const [harvestVerim, setHarvestVerim] = useState('')
   const [harvestSpecies, setHarvestSpecies] = useState('')
   const [harvestNotes, setHarvestNotes] = useState('')
 
@@ -140,12 +149,16 @@ export function QuickEntryPanel({
 
   useEffect(() => {
     const field = fields.find((f) => f.id === fieldId)
-    if (field?.species?.trim()) {
-      setHarvestSpecies(field.species.trim())
-    }
+    setHarvestSpecies(defaultHarvestSpecies(field?.species))
+    setHarvestVerim('')
   }, [fieldId, fields])
 
   const selectedField = fields.find((f) => f.id === fieldId)
+  const isOliveField = isOliveTreeSpecies(selectedField?.species)
+  const harvestOilPreview =
+    isOliveField && estimatedKg !== '' && harvestVerim !== ''
+      ? oliveOilLitersFromHarvest(Number(estimatedKg), Number(harvestVerim))
+      : 0
 
   function resetEntries() {
     setDoneAt(new Date().toISOString().slice(0, 10))
@@ -175,7 +188,8 @@ export function QuickEntryPanel({
     setHarvestTotal(0)
     setHarvestTotalEdited(false)
     setEstimatedKg('')
-    setHarvestSpecies(selectedField?.species?.trim() || '')
+    setHarvestVerim('')
+    setHarvestSpecies(defaultHarvestSpecies(selectedField?.species))
     setHarvestNotes('')
     setGeneralWork('')
     setGeneralCost(0)
@@ -328,6 +342,10 @@ export function QuickEntryPanel({
         dailyWage: harvestWage,
         totalPaid: harvestTotal,
         estimatedKg: estimatedKg === '' ? undefined : Number(estimatedKg),
+        verim:
+          isOliveField && harvestVerim !== ''
+            ? Number(harvestVerim)
+            : undefined,
         species: harvestSpecies || undefined,
         notes: harvestNotes || undefined,
       })
@@ -721,14 +739,34 @@ export function QuickEntryPanel({
                     placeholder="Veri girmek için dokunun.."
                   />
                 </label>
-                <label>
-                  Çeşit
-                  <input
-                    value={harvestSpecies}
-                    onChange={(e) => setHarvestSpecies(e.target.value)}
-                    placeholder="Depoya işlenecek çeşit"
-                  />
-                </label>
+                {isOliveField && (
+                  <label>
+                    Verim
+                    <input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={harvestVerim}
+                      onChange={(e) => setHarvestVerim(e.target.value)}
+                      placeholder="Örn. 5"
+                      required={estimatedKg !== '' && Number(estimatedKg) > 0}
+                    />
+                  </label>
+                )}
+                <HarvestSpeciesInput
+                  treeSpecies={selectedField?.species}
+                  value={harvestSpecies}
+                  onChange={setHarvestSpecies}
+                />
+                {isOliveField && harvestOilPreview > 0 && (
+                  <p className="muted small span-2">
+                    Yaklaşık yağ:{' '}
+                    {harvestOilPreview.toLocaleString('tr-TR', {
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    lt depoya eklenecek (kg ÷ verim).
+                  </p>
+                )}
                 <label className="span-2">
                   Not
                   <input
@@ -739,7 +777,8 @@ export function QuickEntryPanel({
                 </label>
                 <p className="muted small span-2">
                   Toplam ödeme varsayılan olarak işçi × yevmiye; istersen elle
-                  değiştirebilirsin. Kilo + çeşit girilirse ürün depoya eklenir.
+                  değiştirebilirsin. Fıstıkta kilo + çeşit depoya eklenir.
+                  Zeytinde tane kg ÷ verim = litre yağ olarak depoya işlenir.
                 </p>
               </>
             )}

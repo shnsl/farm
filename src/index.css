@@ -707,6 +707,18 @@ textarea:focus {
   gap: 1rem;
 }
 
+.list-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.list-row-actions-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1847,6 +1859,11 @@ code {
   overflow: hidden;
 }
 
+.stats-year-track-stack {
+  display: flex;
+  height: 0.85rem;
+}
+
 .stats-year-fill {
   display: block;
   height: 100%;
@@ -1856,6 +1873,69 @@ code {
     color-mix(in srgb, var(--brand) 70%, #8a5a2b),
     var(--brand-strong)
   );
+}
+
+.stats-year-seg {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.stats-spend-fertilize {
+  background: #2f6b3c;
+}
+
+.stats-spend-prune {
+  background: #5a3d7a;
+}
+
+.stats-spend-harvest {
+  background: #c28a2e;
+}
+
+.stats-spend-hoe {
+  background: #8a5a2b;
+}
+
+.stats-spend-fuel {
+  background: #a34a5c;
+}
+
+.stats-spend-pesticide {
+  background: #1f6f6a;
+}
+
+.stats-spend-general {
+  background: #2a5085;
+}
+
+html[data-theme='dark'] .stats-spend-fertilize {
+  background: #6faf7d;
+}
+
+html[data-theme='dark'] .stats-spend-prune {
+  background: #a88cc8;
+}
+
+html[data-theme='dark'] .stats-spend-harvest {
+  background: #e0b35a;
+}
+
+html[data-theme='dark'] .stats-spend-hoe {
+  background: #d4a06a;
+}
+
+html[data-theme='dark'] .stats-spend-fuel {
+  background: #d48494;
+}
+
+html[data-theme='dark'] .stats-spend-pesticide {
+  background: #4db5ae;
+}
+
+html[data-theme='dark'] .stats-spend-general {
+  background: #6b9fd4;
 }
 
 .stats-year-total {
