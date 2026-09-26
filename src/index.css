@@ -503,6 +503,8 @@ textarea:focus {
   width: min(1200px, 100%);
   margin: 0 auto;
   padding: 1.25rem;
+  /* Alttaki bölümlerin (ör. Satışlar) ekran ortasına kaydırılabilmesi için */
+  padding-bottom: calc(40vh + env(safe-area-inset-bottom, 0px));
 }
 
 .page {
