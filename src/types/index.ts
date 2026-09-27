@@ -268,9 +268,15 @@ export interface WarehouseStockItem {
   /** Miktar: çoğu üründe kg; Zeytinyağı için litre */
   kg: number
   updatedAt: string
+  /** Elle eklenen ürünlerde stok başlangıç tarihi (YYYY-MM-DD) */
+  startedAt?: string
+  notes?: string
+  /** harvest: hasattan; manual: elle girilen */
+  source?: 'harvest' | 'manual'
+  createdBy?: string
 }
 
-/** Depodan satış / kazanç kaydı */
+/** Satış / kazanç kaydı */
 export interface SaleEvent {
   id: string
   doneAt: string
@@ -281,6 +287,33 @@ export interface SaleEvent {
   unitPrice: number
   /** Kazanç */
   earnings: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+/** Alacak (bana ödenecek) veya verecek (ben ödeyeceğim) */
+export type DebtDirection = 'receivable' | 'payable'
+
+/** Borç varlık türü */
+export type DebtAssetType = 'cash' | 'currency' | 'gold' | 'other'
+
+export interface DebtEvent {
+  id: string
+  direction: DebtDirection
+  assetType: DebtAssetType
+  /** Miktar (₺, döviz tutarı, altın gramı vb.) */
+  amount: number
+  /** Döviz kodu / birim (USD, EUR, gr…) */
+  unit?: string
+  /** Karşı taraf (kimden / kime) */
+  counterparty?: string
+  /** Alım / borç oluşma zamanı */
+  takenAt: string
+  /** Planlanan ödeme zamanı */
+  dueAt?: string
+  /** Gerçek ödenme zamanı */
+  paidAt?: string
   notes?: string
   createdBy: string
   createdAt: string

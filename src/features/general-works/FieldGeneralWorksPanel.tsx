@@ -12,6 +12,11 @@ import {
   IconTrash,
 } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { GeneralWorkEvent } from '../../types'
 import {
   createGeneralWork,
@@ -85,6 +90,7 @@ export function FieldGeneralWorksPanel({
   const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  const focus = useFocusNav()
 
   const [doneAt, setDoneAt] = useState(
     () => new Date().toISOString().slice(0, 10),
@@ -105,6 +111,16 @@ export function FieldGeneralWorksPanel({
       (err) => setError(err.message),
     )
   }, [farmId, fieldId])
+
+  useEffect(() => {
+    if (focus?.kind !== 'generalWork' || !focus.entityId) return
+    const inPreview = events
+      .slice(0, PREVIEW_LIMIT)
+      .some((e) => e.id === focus.entityId)
+    if (!inPreview && events.some((e) => e.id === focus.entityId)) {
+      setListOpen(true)
+    }
+  }, [focus?.token, focus?.kind, focus?.entityId, events])
 
   const preview = useMemo(() => events.slice(0, PREVIEW_LIMIT), [events])
   const latest = events[0] ?? null
@@ -237,9 +253,17 @@ export function FieldGeneralWorksPanel({
     }
 
     return (
-      <li key={item.id} className="list-row-actions">
+      <li
+        key={item.id}
+        className="list-row-actions"
+        data-focus-id={focusDomId('generalWork', item.id)}
+      >
         <span className="list-row-actions-main">
-          {item.doneAt.slice(0, 10)} · {item.work} · {formatMoney(item.cost)} ₺
+          <HighlightText
+            text={`${item.doneAt.slice(0, 10)} · ${item.work} · ${formatMoney(item.cost)} ₺`}
+            query={focus?.highlight}
+            active={focus?.isTarget('generalWork', item.id)}
+          />
         </span>
         <div className="table-row-actions">
           <button
@@ -272,6 +296,7 @@ export function FieldGeneralWorksPanel({
       title="Genel İşler"
       icon={<IconNotebook />}
       tone="amber"
+      sectionId="general-works"
       bodyClassName="stack"
     >
       {error && (

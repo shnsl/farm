@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties } from 'react'
 import { buildRowLetters, formatCell } from '../../lib/cells'
+import { focusDomId } from '../../lib/focusNav'
 import { formatTreeAge } from '../../lib/treeAge'
 import type { Tree } from '../../types'
 import { speciesColor } from './speciesColor'
@@ -163,6 +164,9 @@ export function TreeGrid({
                 <button
                   key={cell}
                   type="button"
+                  data-focus-id={
+                    tree ? focusDomId('tree', tree.id) : undefined
+                  }
                   className={[
                     'cell',
                     tree ? 'filled' : 'empty',

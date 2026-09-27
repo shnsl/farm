@@ -1,21 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   HeadingIcon,
   IconSearch,
-  IconTree,
   IconVariety,
   PageTitle,
   SectionTitle,
 } from '../components/Icons'
 import { subscribeFields } from '../features/fields/api'
 import {
-  searchFarmTrees,
-  TREE_HEALTH_LABELS,
-  type TreeSearchHit,
-} from '../features/trees/api'
+  SEARCH_KIND_LABELS,
+  searchFarm,
+  type FarmSearchHit,
+  type SearchHitKind,
+} from '../features/search/api'
 import { useAuth } from '../lib/auth'
-import { formatTreeAge } from '../lib/treeAge'
 import type { Field } from '../types'
 
 export function SearchPage() {
@@ -25,14 +24,23 @@ export function SearchPage() {
   const initialQ = searchParams.get('q') ?? ''
   const [query, setQuery] = useState(initialQ)
   const [fields, setFields] = useState<Field[]>([])
-  const [hits, setHits] = useState<TreeSearchHit[]>([])
+  const [fieldsReady, setFieldsReady] = useState(false)
+  const [hits, setHits] = useState<FarmSearchHit[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searched, setSearched] = useState(false)
 
   useEffect(() => {
     if (!farmId) return
-    return subscribeFields(farmId, setFields, (err) => setError(err.message))
+    setFieldsReady(false)
+    return subscribeFields(
+      farmId,
+      (next) => {
+        setFields(next)
+        setFieldsReady(true)
+      },
+      (err) => setError(err.message),
+    )
   }, [farmId])
 
   useEffect(() => {
@@ -40,20 +48,18 @@ export function SearchPage() {
   }, [initialQ])
 
   useEffect(() => {
-    if (!farmId || !initialQ.trim()) {
-      setHits([])
-      setSearched(false)
+    if (!farmId || !initialQ.trim() || !fieldsReady) {
+      if (!initialQ.trim()) {
+        setHits([])
+        setSearched(false)
+      }
       return
     }
 
     let cancelled = false
     setLoading(true)
     setError(null)
-    void searchFarmTrees(
-      farmId,
-      fields.map((f) => ({ id: f.id, name: f.name })),
-      initialQ,
-    )
+    void searchFarm(farmId, fields, initialQ)
       .then((result) => {
         if (cancelled) return
         setHits(result)
@@ -70,7 +76,17 @@ export function SearchPage() {
     return () => {
       cancelled = true
     }
-  }, [farmId, fields, initialQ])
+  }, [farmId, fields, fieldsReady, initialQ])
+
+  const grouped = useMemo(() => {
+    const map = new Map<SearchHitKind, FarmSearchHit[]>()
+    for (const hit of hits) {
+      const list = map.get(hit.kind) ?? []
+      list.push(hit)
+      map.set(hit.kind, list)
+    }
+    return map
+  }, [hits])
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -86,7 +102,8 @@ export function SearchPage() {
             Ara
           </PageTitle>
           <p className="muted">
-            Tüm tarlalarda hücre, çeşit, etiket, not veya sağlık bilgisine göre ara.
+            Tarla, ağaç, genel iş, hasat, sürüm, gübre, çapa, budama, yakıt,
+            ilaç, depo ve satış kayıtlarında ara.
           </p>
         </div>
       </header>
@@ -120,48 +137,37 @@ export function SearchPage() {
           {hits.length === 0 ? (
             <p className="muted">Eşleşen kayıt yok.</p>
           ) : (
-            <ul className="field-list">
-              {hits.map((hit) => (
-                <li key={`${hit.fieldId}-${hit.tree.id}`}>
-                  <button
-                    type="button"
-                    className="field-card search-hit"
-                    onClick={() =>
-                      navigate(
-                        `/fields/${hit.fieldId}?cell=${encodeURIComponent(hit.tree.cell)}`,
-                      )
-                    }
-                  >
-                    <span className="field-card-icon">
-                      <HeadingIcon tone="olive">
-                        <IconTree />
-                      </HeadingIcon>
-                    </span>
-                    <strong>
-                      {hit.fieldName} · {hit.tree.cell}
-                    </strong>
-                    <span className="muted">
-                      {[
-                        hit.tree.species,
-                        hit.tree.label,
-                        hit.tree.health
-                          ? TREE_HEALTH_LABELS[hit.tree.health]
-                          : null,
-                        hit.tree.plantedAt,
-                        formatTreeAge(hit.tree.plantedAt),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ') || 'Detay yok'}
-                    </span>
-                    {hit.tree.notes && (
-                      <span className="muted small search-hit-notes">
-                        {hit.tree.notes}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            [...grouped.entries()].map(([kind, list]) => (
+              <div key={kind} className="stack">
+                <h3 className="muted small">
+                  {SEARCH_KIND_LABELS[kind]} ({list.length})
+                </h3>
+                <ul className="field-list">
+                  {list.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        className="field-card search-hit"
+                        onClick={() => navigate(hit.href)}
+                      >
+                        <span className="field-card-icon">
+                          <HeadingIcon tone="olive">
+                            <IconSearch />
+                          </HeadingIcon>
+                        </span>
+                        <strong>{hit.title}</strong>
+                        <span className="muted">{hit.subtitle}</span>
+                        {hit.detail && (
+                          <span className="muted small search-hit-notes">
+                            {hit.detail}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </section>
       )}

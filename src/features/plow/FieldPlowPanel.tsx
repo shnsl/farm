@@ -14,6 +14,7 @@ import {
   IconList,
   IconPlow,
 } from '../../components/Icons'
+import { focusDomId, HighlightText, useFocusNav } from '../../lib/focusNav'
 import {
   buildPlowStatPeriods,
   createHarvestEvent,
@@ -146,10 +147,23 @@ export function FieldPlowPanel({
   const [plowModalOpen, setPlowModalOpen] = useState(false)
   const [harvestModalOpen, setHarvestModalOpen] = useState(false)
   const [chartModalOpen, setChartModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     setHarvestSpecies(defaultHarvestSpecies(defaultSpecies))
   }, [defaultSpecies])
+
+  useEffect(() => {
+    if (!focus?.entityId) return
+    if (focus.kind === 'plow') {
+      const idx = plows.findIndex((p) => p.id === focus.entityId)
+      if (idx >= PREVIEW_LIMIT) setPlowModalOpen(true)
+    }
+    if (focus.kind === 'harvest') {
+      const idx = harvests.findIndex((h) => h.id === focus.entityId)
+      if (idx >= PREVIEW_LIMIT) setHarvestModalOpen(true)
+    }
+  }, [focus?.token, focus?.kind, focus?.entityId, plows, harvests])
 
   useEffect(() => {
     const unsubPlow = subscribePlowEvents(
@@ -326,12 +340,22 @@ export function FieldPlowPanel({
   }
 
   function renderPlowItem(p: PlowEvent) {
+    const line = [
+      p.doneAt.slice(0, 10),
+      PLOW_DIRECTION_LABELS[p.direction],
+      p.equipment,
+      p.notes,
+    ]
+      .filter(Boolean)
+      .join(' · ')
     return (
-      <li key={p.id}>
+      <li key={p.id} data-focus-id={focusDomId('plow', p.id)}>
         <span>
-          {p.doneAt.slice(0, 10)} · {PLOW_DIRECTION_LABELS[p.direction]}
-          {p.equipment ? ` · ${p.equipment}` : ''}
-          {p.notes ? ` · ${p.notes}` : ''}
+          <HighlightText
+            text={line}
+            query={focus?.highlight}
+            active={focus?.isTarget('plow', p.id)}
+          />
         </span>
         <button
           type="button"
@@ -357,22 +381,29 @@ export function FieldPlowPanel({
   }
 
   function renderHarvestItem(h: HarvestEvent) {
+    const line = [
+      h.doneAt.slice(0, 10),
+      `${h.workerCount} işçi`,
+      `yevmiye ${formatMoney(h.dailyWage)}`,
+      `toplam ${formatMoney(h.totalPaid)}`,
+      h.species,
+      h.estimatedKg !== undefined ? `~${formatMoney(h.estimatedKg)} kg` : null,
+      h.verim !== undefined ? `verim ${formatMoney(h.verim)}` : null,
+      h.estimatedKg !== undefined && h.verim !== undefined && h.verim > 0
+        ? `~${formatMoney(oliveOilLitersFromHarvest(h.estimatedKg, h.verim))} lt yağ`
+        : null,
+      h.notes,
+    ]
+      .filter(Boolean)
+      .join(' · ')
     return (
-      <li key={h.id}>
+      <li key={h.id} data-focus-id={focusDomId('harvest', h.id)}>
         <span>
-          {h.doneAt.slice(0, 10)} · {h.workerCount} işçi · yevmiye{' '}
-          {formatMoney(h.dailyWage)} · toplam {formatMoney(h.totalPaid)}
-          {h.species ? ` · ${h.species}` : ''}
-          {h.estimatedKg !== undefined
-            ? ` · ~${formatMoney(h.estimatedKg)} kg`
-            : ''}
-          {h.verim !== undefined ? ` · verim ${formatMoney(h.verim)}` : ''}
-          {h.estimatedKg !== undefined &&
-          h.verim !== undefined &&
-          h.verim > 0
-            ? ` · ~${formatMoney(oliveOilLitersFromHarvest(h.estimatedKg, h.verim))} lt yağ`
-            : ''}
-          {h.notes ? ` · ${h.notes}` : ''}
+          <HighlightText
+            text={line}
+            query={focus?.highlight}
+            active={focus?.isTarget('harvest', h.id)}
+          />
         </span>
         <button
           type="button"
@@ -402,6 +433,7 @@ export function FieldPlowPanel({
       title="Sürüm ve Hasat"
       icon={<IconPlow />}
       tone="amber"
+      sectionId="plow"
       bodyClassName="stack"
     >
       {error && (
@@ -429,7 +461,7 @@ export function FieldPlowPanel({
         ))}
       </div>
 
-      <CollapseSection title="Sürüm Kaydı" icon={<IconFurrows />} tone="olive">
+      <CollapseSection title="Sürüm Kaydı" icon={<IconFurrows />} tone="olive" sectionId="plow-records">
         <form className="form-grid" onSubmit={onAddPlow}>
           <label>
             Tarih
@@ -490,7 +522,7 @@ export function FieldPlowPanel({
         </form>
       </CollapseSection>
 
-      <CollapseSection title="Hasat Kaydı" icon={<IconHarvest />} tone="olive">
+      <CollapseSection title="Hasat Kaydı" icon={<IconHarvest />} tone="olive" sectionId="harvest">
         <form className="form-grid" onSubmit={onAddHarvest}>
           <label>
             Tarih
@@ -603,6 +635,7 @@ export function FieldPlowPanel({
           title="Hasat İstatistikleri"
           icon={<IconChart />}
           tone="sky"
+          sectionId="harvest-stats"
         >
           <div className="table-wrap">
             <table className="data-table">
@@ -735,7 +768,7 @@ export function FieldPlowPanel({
                       </td>
                     </tr>
                   ) : (
-                    <tr key={h.id}>
+                    <tr key={h.id} data-focus-id={focusDomId('harvest', h.id)}>
                       <td>{h.doneAt.slice(0, 4)}</td>
                       <td>{h.doneAt.slice(0, 10)}</td>
                       <td>{h.workerCount}</td>

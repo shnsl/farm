@@ -42,6 +42,11 @@ import { TreeGrid } from '../features/trees/TreeGrid'
 import { formatCell, letterToRowIndex, rowIndexToLetter } from '../lib/cells'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../lib/focusNav'
 import { formatTreeAge } from '../lib/treeAge'
 import type { Field, Tree, TreeHealth } from '../types'
 
@@ -49,6 +54,7 @@ export function FieldDetailPage() {
   const { fieldId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { farmId, user } = useAuth()
+  const focus = useFocusNav()
   const [field, setField] = useState<Field | null>(null)
   const [trees, setTrees] = useState<Tree[]>([])
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
@@ -941,23 +947,45 @@ export function FieldDetailPage() {
           title="Tarla Bilgileri"
           icon={<IconInfo />}
           tone="olive"
+          sectionId="field-info"
           bodyClassName="stack"
         >
           {!editingBulkSpecies ? (
-            <div className="info-summary stack">
+            <div
+              className="info-summary stack"
+              data-focus-id={focusDomId('field', field.id)}
+            >
               <dl className="summary-list">
                 {field.area?.trim() && (
                   <>
                     <dt>Yer</dt>
-                    <dd>{field.area}</dd>
+                    <dd>
+                      <HighlightText
+                        text={field.area}
+                        query={focus?.highlight}
+                        active={focus?.isTarget('field', field.id)}
+                      />
+                    </dd>
                   </>
                 )}
                 <dt>Tarla</dt>
-                <dd>{field.name}</dd>
+                <dd>
+                  <HighlightText
+                    text={field.name}
+                    query={focus?.highlight}
+                    active={focus?.isTarget('field', field.id)}
+                  />
+                </dd>
                 {field.species?.trim() && (
                   <>
                     <dt>Çeşit</dt>
-                    <dd>{field.species}</dd>
+                    <dd>
+                      <HighlightText
+                        text={field.species}
+                        query={focus?.highlight}
+                        active={focus?.isTarget('field', field.id)}
+                      />
+                    </dd>
                   </>
                 )}
                 {field.donum !== undefined && (
@@ -1102,6 +1130,7 @@ export function FieldDetailPage() {
         title="Tarla İçeriği"
         icon={<IconGrid />}
         tone="green"
+        sectionId="field-grid"
         className={multiSelect ? 'multi-mode' : undefined}
       >
         <div className="field-layout">
@@ -1238,21 +1267,51 @@ export function FieldDetailPage() {
                       </p>
                       <dl className="summary-list">
                         <dt>Çeşit</dt>
-                        <dd>{selectedTree.species || '—'}</dd>
+                        <dd>
+                          <HighlightText
+                            text={selectedTree.species || '—'}
+                            query={focus?.highlight}
+                            active={focus?.isTarget('tree', selectedTree.id)}
+                          />
+                        </dd>
                         <dt>Etiket</dt>
-                        <dd>{selectedTree.label || '—'}</dd>
+                        <dd>
+                          <HighlightText
+                            text={selectedTree.label || '—'}
+                            query={focus?.highlight}
+                            active={focus?.isTarget('tree', selectedTree.id)}
+                          />
+                        </dd>
                         <dt>Dikim</dt>
-                        <dd>{selectedTree.plantedAt || '—'}</dd>
+                        <dd>
+                          <HighlightText
+                            text={selectedTree.plantedAt || '—'}
+                            query={focus?.highlight}
+                            active={focus?.isTarget('tree', selectedTree.id)}
+                          />
+                        </dd>
                         <dt>Yaş</dt>
                         <dd>{formatTreeAge(selectedTree.plantedAt) || '—'}</dd>
                         <dt>Sağlık</dt>
                         <dd>
-                          {selectedTree.health
-                            ? TREE_HEALTH_LABELS[selectedTree.health]
-                            : '—'}
+                          <HighlightText
+                            text={
+                              selectedTree.health
+                                ? TREE_HEALTH_LABELS[selectedTree.health]
+                                : '—'
+                            }
+                            query={focus?.highlight}
+                            active={focus?.isTarget('tree', selectedTree.id)}
+                          />
                         </dd>
                         <dt>Not</dt>
-                        <dd>{selectedTree.notes || '—'}</dd>
+                        <dd>
+                          <HighlightText
+                            text={selectedTree.notes || '—'}
+                            query={focus?.highlight}
+                            active={focus?.isTarget('tree', selectedTree.id)}
+                          />
+                        </dd>
                       </dl>
                       <button
                         type="button"

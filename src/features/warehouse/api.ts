@@ -8,9 +8,9 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   type Unsubscribe,
 } from 'firebase/firestore'
@@ -24,7 +24,25 @@ import {
   isPlainFistikStock,
   litersToTeneke,
   stockUnitLabel,
+  warehouseDeltaFromHarvest,
 } from './harvestProducts'
+
+function normalizeSpeciesKey(species: string): string {
+  return species.trim().toLocaleLowerCase('tr-TR')
+}
+
+/** Depoda hasattan gelen fıstık / zeytinyağı satırları */
+function isHarvestDepotSpecies(species?: string | null): boolean {
+  if (!species?.trim()) return false
+  if (isOliveOilStock(species) || isPlainFistikStock(species)) return true
+  const s = normalizeSpeciesKey(species)
+  return (
+    s === normalizeSpeciesKey(BOZ_FISTIK) ||
+    s === normalizeSpeciesKey(BEN_FISTIK) ||
+    s.includes('fıstık') ||
+    s.includes('fistik')
+  )
+}
 
 export const createSaleSchema = z.object({
   doneAt: z.string().trim().min(1, 'Tarih gerekli'),
@@ -35,6 +53,15 @@ export const createSaleSchema = z.object({
 })
 
 export type CreateSaleInput = z.infer<typeof createSaleSchema>
+
+export const createManualStockSchema = z.object({
+  species: z.string().trim().min(1, 'Ürün adı gerekli').max(80),
+  kg: z.coerce.number().positive('Stok kilosu 0’dan büyük olmalı'),
+  startedAt: z.string().trim().min(1, 'Başlangıç tarihi gerekli'),
+  notes: z.string().trim().max(500).optional(),
+})
+
+export type CreateManualStockInput = z.infer<typeof createManualStockSchema>
 
 export function saleEarnings(input: {
   soldKg: number
@@ -52,11 +79,19 @@ function mapStock(
   id: string,
   data: Record<string, unknown>,
 ): WarehouseStockItem {
+  const source =
+    data.source === 'manual' || data.source === 'harvest'
+      ? data.source
+      : undefined
   return {
     id,
     species: String(data.species ?? ''),
     kg: Number(data.kg ?? 0),
     updatedAt: String(data.updatedAtIso ?? ''),
+    startedAt: data.startedAt ? String(data.startedAt) : undefined,
+    notes: data.notes ? String(data.notes) : undefined,
+    source,
+    createdBy: data.createdBy ? String(data.createdBy) : undefined,
   }
 }
 
@@ -116,14 +151,22 @@ export function subscribeSales(
   )
 }
 
-/** Hasat girişi / düzeltme / silme için depo kilosunu günceller. */
+/** Aynı çeşit için kararlı doküman kimliği (çok cihazlı yarışı azaltır). */
+function warehouseStockDocId(species: string): string {
+  return `s_${encodeURIComponent(species.trim()).replace(/%/g, '_')}`
+}
+
+/** Hasat girişi / düzeltme / silme / satış için depo kilosunu günceller. */
 export async function adjustWarehouseStock(
   farmId: string,
   species: string,
   deltaKg: number,
+  options?: { startedAt?: string },
 ): Promise<void> {
   const name = species.trim()
   if (!name || !deltaKg) return
+
+  const harvestStartedAt = options?.startedAt?.trim().slice(0, 10) || undefined
 
   const q = query(
     collection(db, 'farms', farmId, 'warehouseStock'),
@@ -131,33 +174,56 @@ export async function adjustWarehouseStock(
   )
   const snap = await getDocs(q)
   const now = new Date().toISOString()
+  const preferredRef = snap.empty
+    ? doc(db, 'farms', farmId, 'warehouseStock', warehouseStockDocId(name))
+    : snap.docs[0].ref
 
-  if (snap.empty) {
-    if (deltaKg < 0) {
-      throw new Error(`Depoda “${name}” stoğu yok`)
+  await runTransaction(db, async (transaction) => {
+    const fresh = await transaction.get(preferredRef)
+    if (!fresh.exists()) {
+      if (deltaKg < 0) {
+        throw new Error(`Depoda “${name}” stoğu yok`)
+      }
+      transaction.set(preferredRef, {
+        species: name,
+        kg: Number(deltaKg.toFixed(2)),
+        ...(harvestStartedAt ? { startedAt: harvestStartedAt } : {}),
+        source: 'harvest',
+        updatedAt: serverTimestamp(),
+        updatedAtIso: now,
+      })
+      return
     }
-    await addDoc(collection(db, 'farms', farmId, 'warehouseStock'), {
-      species: name,
-      kg: Number(deltaKg.toFixed(2)),
+
+    const data = fresh.data() ?? {}
+    const current = Number(data.kg ?? 0)
+    const next = Number((current + deltaKg).toFixed(2))
+    if (next < -0.001) {
+      const unit = stockUnitLabel(name)
+      throw new Error(
+        `Depoda yeterli “${name}” yok (mevcut: ${current.toLocaleString('tr-TR')} ${unit})`,
+      )
+    }
+
+    const patch: Record<string, unknown> = {
+      kg: Math.max(0, next),
       updatedAt: serverTimestamp(),
       updatedAtIso: now,
-    })
-    return
-  }
+    }
 
-  const ref = snap.docs[0].ref
-  const current = Number(snap.docs[0].data().kg ?? 0)
-  const next = Number((current + deltaKg).toFixed(2))
-  if (next < -0.001) {
-    const unit = stockUnitLabel(name)
-    throw new Error(
-      `Depoda yeterli “${name}” yok (mevcut: ${current.toLocaleString('tr-TR')} ${unit})`,
-    )
-  }
-  await updateDoc(ref, {
-    kg: Math.max(0, next),
-    updatedAt: serverTimestamp(),
-    updatedAtIso: now,
+    // Hasattan gelen pozitif stok: başlangıç = en erken hasat tarihi
+    if (deltaKg > 0 && harvestStartedAt) {
+      const existingStarted = data.startedAt
+        ? String(data.startedAt).slice(0, 10)
+        : ''
+      patch.startedAt =
+        existingStarted && existingStarted < harvestStartedAt
+          ? existingStarted
+          : harvestStartedAt
+      if (!data.source) patch.source = 'harvest'
+    }
+
+    transaction.update(preferredRef, patch)
   })
 }
 
@@ -177,22 +243,27 @@ export async function setWarehouseStockKg(
     where('species', '==', name),
   )
   const snap = await getDocs(q)
+  const preferredRef = snap.empty
+    ? doc(db, 'farms', farmId, 'warehouseStock', warehouseStockDocId(name))
+    : snap.docs[0].ref
 
-  if (snap.empty) {
-    if (nextKg <= 0) return
-    await addDoc(collection(db, 'farms', farmId, 'warehouseStock'), {
-      species: name,
+  await runTransaction(db, async (transaction) => {
+    const fresh = await transaction.get(preferredRef)
+    if (!fresh.exists()) {
+      if (nextKg <= 0) return
+      transaction.set(preferredRef, {
+        species: name,
+        kg: nextKg,
+        updatedAt: serverTimestamp(),
+        updatedAtIso: now,
+      })
+      return
+    }
+    transaction.update(preferredRef, {
       kg: nextKg,
       updatedAt: serverTimestamp(),
       updatedAtIso: now,
     })
-    return
-  }
-
-  await updateDoc(snap.docs[0].ref, {
-    kg: nextKg,
-    updatedAt: serverTimestamp(),
-    updatedAtIso: now,
   })
 }
 
@@ -227,6 +298,74 @@ export async function ensureFistikWarehouseSplit(farmId: string): Promise<void> 
       fistikHarvestSplitAt: serverTimestamp(),
     },
     { merge: true },
+  )
+}
+
+/**
+ * Fıstık / zeytinyağı depo satırlarının stok başlangıcını en erken hasat
+ * tarihine çeker (eksik veya daha geç olanları günceller).
+ */
+export async function syncHarvestStockStartedAt(farmId: string): Promise<void> {
+  const fieldsSnap = await getDocs(collection(db, 'farms', farmId, 'fields'))
+  const earliestBySpecies = new Map<string, string>()
+
+  await Promise.all(
+    fieldsSnap.docs.map(async (fieldDoc) => {
+      const harvestSnap = await getDocs(
+        collection(
+          db,
+          'farms',
+          farmId,
+          'fields',
+          fieldDoc.id,
+          'harvestEvents',
+        ),
+      )
+      for (const h of harvestSnap.docs) {
+        const data = h.data()
+        const doneAt = String(data.doneAt ?? '').slice(0, 10)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(doneAt)) continue
+        const species = data.species ? String(data.species) : ''
+        const kg = Number(data.estimatedKg ?? 0)
+        const verim =
+          data.verim === null || data.verim === undefined
+            ? undefined
+            : Number(data.verim)
+        const delta = warehouseDeltaFromHarvest(species, kg, verim)
+        if (!delta || !isHarvestDepotSpecies(delta.species)) continue
+        const key = delta.species
+        const prev = earliestBySpecies.get(key)
+        if (!prev || doneAt < prev) earliestBySpecies.set(key, doneAt)
+      }
+    }),
+  )
+
+  if (earliestBySpecies.size === 0) return
+
+  const stockSnap = await getDocs(
+    collection(db, 'farms', farmId, 'warehouseStock'),
+  )
+  const now = new Date().toISOString()
+  await Promise.all(
+    stockSnap.docs.map(async (d) => {
+      const species = String(d.data().species ?? '')
+      if (!isHarvestDepotSpecies(species)) return
+      const earliest = earliestBySpecies.get(species)
+      if (!earliest) return
+      const current = d.data().startedAt
+        ? String(d.data().startedAt).slice(0, 10)
+        : ''
+      if (current && current <= earliest) return
+      await setDoc(
+        d.ref,
+        {
+          startedAt: earliest,
+          updatedAt: serverTimestamp(),
+          updatedAtIso: now,
+        },
+        { merge: true },
+      )
+    }),
   )
 }
 
@@ -277,6 +416,74 @@ export async function deleteSale(
   if (restoreToDepot && species && soldKg) {
     await adjustWarehouseStock(farmId, species, soldKg)
   }
+}
+
+/**
+ * Elle depo ürünü ekler (ör. buğday). Aynı ürün adı varsa kiloyu biriktirir;
+ * başlangıç tarihini en erken değerde tutar. Satış ekranında seçilebilir.
+ */
+export async function addManualWarehouseStock(
+  farmId: string,
+  input: CreateManualStockInput,
+  createdBy: string,
+): Promise<string> {
+  const parsed = createManualStockSchema.parse(input)
+  const name = parsed.species
+  const addKg = Number(parsed.kg.toFixed(2))
+  const now = new Date().toISOString()
+
+  const q = query(
+    collection(db, 'farms', farmId, 'warehouseStock'),
+    where('species', '==', name),
+  )
+  const snap = await getDocs(q)
+  const preferredRef = snap.empty
+    ? doc(db, 'farms', farmId, 'warehouseStock', warehouseStockDocId(name))
+    : snap.docs[0].ref
+
+  await runTransaction(db, async (transaction) => {
+    const fresh = await transaction.get(preferredRef)
+    if (!fresh.exists()) {
+      transaction.set(preferredRef, {
+        species: name,
+        kg: addKg,
+        startedAt: parsed.startedAt,
+        notes: parsed.notes || null,
+        source: 'manual',
+        createdBy,
+        updatedAt: serverTimestamp(),
+        updatedAtIso: now,
+        createdAt: serverTimestamp(),
+        createdAtIso: now,
+      })
+      return
+    }
+
+    const data = fresh.data() ?? {}
+    const current = Number(data.kg ?? 0)
+    const next = Number((current + addKg).toFixed(2))
+    const existingStarted = data.startedAt ? String(data.startedAt) : ''
+    const startedAt =
+      existingStarted && existingStarted < parsed.startedAt
+        ? existingStarted
+        : parsed.startedAt
+    const existingNotes = data.notes ? String(data.notes) : ''
+    const notes =
+      parsed.notes && parsed.notes !== existingNotes
+        ? [existingNotes, parsed.notes].filter(Boolean).join(' · ') || null
+        : existingNotes || parsed.notes || null
+
+    transaction.update(preferredRef, {
+      kg: next,
+      startedAt,
+      notes,
+      ...(data.source ? {} : { source: 'manual' }),
+      updatedAt: serverTimestamp(),
+      updatedAtIso: now,
+    })
+  })
+
+  return preferredRef.id
 }
 
 /** Yanlış eklenen depo satırını tamamen siler. */

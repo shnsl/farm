@@ -14,6 +14,11 @@ import {
   SectionTitle,
 } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { HoeEvent } from '../../types'
 import {
   createHoeEvent,
@@ -102,6 +107,7 @@ export function FieldHoePanel({
   const [editTotalEdited, setEditTotalEdited] = useState(true)
   const [editNotes, setEditNotes] = useState('')
   const [chartModalOpen, setChartModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     return subscribeHoeEvents(
@@ -123,7 +129,16 @@ export function FieldHoePanel({
   }, [editWorkerCount, editDailyWage, editTotalEdited])
 
   const latest = events[0] ?? null
-  const preview = useMemo(() => events.slice(0, PREVIEW_LIMIT), [events])
+  const preview = useMemo(() => {
+    if (
+      focus?.kind === 'hoe' &&
+      focus.entityId &&
+      events.some((e) => e.id === focus.entityId)
+    ) {
+      return events
+    }
+    return events.slice(0, PREVIEW_LIMIT)
+  }, [events, focus?.kind, focus?.entityId, focus?.token])
   const byYear = useMemo(() => aggregateHoeByYear(events), [events])
 
   function startEdit(event: HoeEvent) {
@@ -196,6 +211,7 @@ export function FieldHoePanel({
       title="Çapalama"
       icon={<IconHoe />}
       tone="amber"
+      sectionId="hoe"
       bodyClassName="stack"
     >
       {error && (
@@ -222,7 +238,7 @@ export function FieldHoePanel({
         )}
       </div>
 
-      <CollapseSection title="Çapalama Kaydı" icon={<IconSoil />} tone="olive">
+      <CollapseSection title="Çapalama Kaydı" icon={<IconSoil />} tone="olive" sectionId="hoe-records">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Çapalama tarihi
@@ -432,12 +448,21 @@ export function FieldHoePanel({
                   </form>
                 </li>
               ) : (
-                <li key={item.id}>
+                <li key={item.id} data-focus-id={focusDomId('hoe', item.id)}>
                   <span>
-                    {item.doneAt.slice(0, 10)} · {item.workerCount} işçi ·{' '}
-                    {formatMoney(item.dailyWage)} yevmiye · toplam{' '}
-                    {formatMoney(item.totalPaid)}
-                    {item.notes ? ` · ${item.notes}` : ''}
+                    <HighlightText
+                      text={[
+                        item.doneAt.slice(0, 10),
+                        `${item.workerCount} işçi`,
+                        `${formatMoney(item.dailyWage)} yevmiye`,
+                        `toplam ${formatMoney(item.totalPaid)}`,
+                        item.notes,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      query={focus?.highlight}
+                      active={focus?.isTarget('hoe', item.id)}
+                    />
                   </span>
                   <div className="table-row-actions">
                     <button

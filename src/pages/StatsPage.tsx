@@ -16,14 +16,11 @@ import { subscribeFields } from '../features/fields/api'
 import { backfillMissingTreeStats } from '../features/fields/treeStats'
 import {
   buildInstantFarmStats,
+  invalidateFarmStatsCache,
   loadFarmStats,
   type FarmStats,
   type YearSpendStat,
 } from '../features/stats/api'
-import {
-  FarmDepotPanel,
-  FarmEarningsPanel,
-} from '../features/warehouse/FarmDepotPanel'
 import { useAuth } from '../lib/auth'
 import type { Field } from '../types'
 
@@ -62,7 +59,7 @@ const SPEND_SEGMENTS: {
 ]
 
 export function StatsPage() {
-  const { farmId, user } = useAuth()
+  const { farmId } = useAuth()
   const [fields, setFields] = useState<Field[]>([])
   const [fieldsReady, setFieldsReady] = useState(false)
   const [stats, setStats] = useState<FarmStats | null>(null)
@@ -115,27 +112,43 @@ export function StatsPage() {
 
   useEffect(() => {
     if (!farmId || !fieldsReady) return
+    const activeFarmId = farmId
     let cancelled = false
-    setSpendLoading(true)
-    setError(null)
-    void loadFarmStats(farmId, fields)
-      .then((result) => {
-        if (!cancelled) setStats(result)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'İstatistikler yüklenemedi',
-          )
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSpendLoading(false)
-      })
+
+    function reload() {
+      setSpendLoading(true)
+      setError(null)
+      invalidateFarmStatsCache(activeFarmId)
+      void loadFarmStats(activeFarmId, fields)
+        .then((result) => {
+          if (!cancelled) setStats(result)
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setError(
+              err instanceof Error ? err.message : 'İstatistikler yüklenemedi',
+            )
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSpendLoading(false)
+        })
+    }
+
+    reload()
+
+    function onVisible() {
+      if (document.visibilityState === 'visible') reload()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- aynı tarla setinde tekrar yükleme
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- aynı tarla setinde focus ile yenile
   }, [farmId, fieldsReady, fieldIdsKey])
 
   const maxSpend = Math.max(...(display.byYear.map((y) => y.total) ?? [0]), 1)
@@ -445,12 +458,6 @@ export function StatsPage() {
               </>
             )}
           </CollapseSection>
-
-          {farmId && user && (
-            <FarmDepotPanel farmId={farmId} userId={user.uid} />
-          )}
-
-          {farmId && <FarmEarningsPanel farmId={farmId} />}
         </>
       )}
     </div>

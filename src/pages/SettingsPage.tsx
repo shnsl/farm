@@ -85,7 +85,6 @@ export function SettingsPage() {
         title="Tema Rengi"
         icon={<IconPalette />}
         tone="violet"
-        defaultOpen
         bodyClassName="stack"
       >
         <p className="muted small">Açık / koyu mod</p>

@@ -32,11 +32,16 @@ export interface FarmStats {
   byYear: YearSpendStat[]
 }
 
-const STATS_CACHE_TTL_MS = 60_000
+const STATS_CACHE_TTL_MS = 5_000
 const statsCache = new Map<
   string,
   { at: number; fieldIdsKey: string; stats: FarmStats }
 >()
+
+export function invalidateFarmStatsCache(farmId?: string) {
+  if (farmId) statsCache.delete(farmId)
+  else statsCache.clear()
+}
 
 function yearOf(doneAt: string): string | null {
   const y = doneAt.slice(0, 4)
@@ -315,9 +320,4 @@ export async function loadFarmStats(
 
   statsCache.set(farmId, { at: Date.now(), fieldIdsKey, stats })
   return stats
-}
-
-export function invalidateFarmStatsCache(farmId?: string) {
-  if (farmId) statsCache.delete(farmId)
-  else statsCache.clear()
 }

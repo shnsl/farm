@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useNavSwipe } from '../lib/useNavSwipe'
 import {
+  IconArea,
   IconCompare,
   IconFields,
   IconSearch,
@@ -38,6 +39,10 @@ export function AppLayout() {
           <NavLink to="/" end>
             <IconFields />
             Tarlalar
+          </NavLink>
+          <NavLink to="/assets">
+            <IconArea />
+            Varlıklar
           </NavLink>
           <NavLink to="/stats">
             <IconCompare />

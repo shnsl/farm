@@ -121,10 +121,13 @@ async function applyHarvestWarehouseDelta(
   kg: number,
   verim: number | null | undefined,
   sign: 1 | -1,
+  harvestDoneAt?: string,
 ): Promise<void> {
   const delta = warehouseDeltaFromHarvest(species, kg, verim)
   if (!delta) return
-  await adjustWarehouseStock(farmId, delta.species, sign * delta.delta)
+  await adjustWarehouseStock(farmId, delta.species, sign * delta.delta, {
+    startedAt: sign > 0 ? harvestDoneAt : undefined,
+  })
 }
 
 export function subscribePlowEvents(
@@ -196,7 +199,7 @@ export async function createHarvestEvent(
   const species = parsed.species?.trim() || ''
   const verim = parsed.verim
 
-  await applyHarvestWarehouseDelta(farmId, species, kg, verim, 1)
+  await applyHarvestWarehouseDelta(farmId, species, kg, verim, 1, parsed.doneAt)
 
   try {
     const ref = await addDoc(
@@ -242,9 +245,23 @@ export async function updateHarvestEvent(
 
   await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, -1)
   try {
-    await applyHarvestWarehouseDelta(farmId, newSpecies, newKg, newVerim, 1)
+    await applyHarvestWarehouseDelta(
+      farmId,
+      newSpecies,
+      newKg,
+      newVerim,
+      1,
+      parsed.doneAt,
+    )
   } catch (err) {
-    await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, 1)
+    await applyHarvestWarehouseDelta(
+      farmId,
+      oldSpecies,
+      oldKg,
+      oldVerim,
+      1,
+      prev?.doneAt,
+    )
     throw err
   }
 
@@ -261,7 +278,14 @@ export async function updateHarvestEvent(
     })
   } catch (err) {
     await applyHarvestWarehouseDelta(farmId, newSpecies, newKg, newVerim, -1)
-    await applyHarvestWarehouseDelta(farmId, oldSpecies, oldKg, oldVerim, 1)
+    await applyHarvestWarehouseDelta(
+      farmId,
+      oldSpecies,
+      oldKg,
+      oldVerim,
+      1,
+      prev?.doneAt,
+    )
     throw err
   }
 }

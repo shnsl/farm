@@ -8,6 +8,11 @@ import {
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconFuel, SectionTitle } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { FuelEvent } from '../../types'
 import {
   createFuelEvent,
@@ -98,6 +103,7 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
   const [editSource, setEditSource] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     return subscribeFuelEvents(
@@ -106,6 +112,12 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
       (err) => setError(err.message),
     )
   }, [farmId])
+
+  useEffect(() => {
+    if (focus?.kind !== 'fuel' || !focus.entityId) return
+    const idx = events.findIndex((e) => e.id === focus.entityId)
+    if (idx >= PREVIEW_LIMIT) setModalOpen(true)
+  }, [focus?.token, focus?.kind, focus?.entityId, events])
 
   const summary = useMemo(() => fuelPurchaseSummary(events), [events])
   const purchasePreview = useMemo(
@@ -260,12 +272,22 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
     }
 
     return (
-      <li key={e.id}>
+      <li key={e.id} data-focus-id={focusDomId('fuel', e.id)}>
         <span>
-          {e.doneAt.slice(0, 10)} · {formatLiters(e.liters)} lt ·{' '}
-          {formatMoney(e.unitPrice ?? 0)} ₺/lt · {formatMoney(e.totalCost ?? 0)}
-          {e.source ? ` · ${e.source}` : ''}
-          {e.notes ? ` · ${e.notes}` : ''}
+          <HighlightText
+            text={[
+              e.doneAt.slice(0, 10),
+              `${formatLiters(e.liters)} lt`,
+              `${formatMoney(e.unitPrice ?? 0)} ₺/lt`,
+              formatMoney(e.totalCost ?? 0),
+              e.source,
+              e.notes,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            query={focus?.highlight}
+            active={focus?.isTarget('fuel', e.id)}
+          />
         </span>
         <div className="bulk-actions">
           <button
@@ -307,6 +329,7 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
       title="Yakıt"
       icon={<IconFuel />}
       tone="rose"
+      sectionId="fuel"
       bodyClassName="stack"
     >
       <p className="muted small">

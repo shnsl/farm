@@ -1,6 +1,17 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import {
+  browserLocalPersistence,
+  getAuth,
+  setPersistence,
+  type Auth,
+} from 'firebase/auth'
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,4 +38,28 @@ assertConfig()
 
 export const app: FirebaseApp = initializeApp(firebaseConfig)
 export const auth: Auth = getAuth(app)
-export const db: Firestore = getFirestore(app)
+
+/**
+ * İş verisinin kaynağı her zaman Cloud Firestore’tur.
+ * persistentLocalCache: kısa süreli offline yazıları kuyruğa alır ve
+ * tekrar online olunca sunucuya senkronlar; cihazlar arası kaynak Firebase’dir.
+ * (Tema/font gibi UI tercihleri localStorage’dadır — iş kaydı değildir.)
+ */
+function createDb(): Firestore {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    })
+  } catch {
+    // HMR / ikinci init
+    return getFirestore(app)
+  }
+}
+
+export const db: Firestore = createDb()
+
+void setPersistence(auth, browserLocalPersistence).catch((err: unknown) => {
+  console.warn('Auth persistence ayarlanamadı', err)
+})

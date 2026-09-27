@@ -23,6 +23,11 @@ import { FarmPesticidePanel } from '../features/pesticide/FarmPesticidePanel'
 import { QuickEntryPanel } from '../features/quick-entry/QuickEntryPanel'
 import { useAuth } from '../lib/auth'
 import { confirmDelete } from '../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../lib/focusNav'
 import type { Field } from '../types'
 
 type FieldSortMode = 0 | 1 | 2 | 3
@@ -59,6 +64,7 @@ function activeCount(field: Field): number {
 
 export function DashboardPage() {
   const { farmId, user } = useAuth()
+  const focus = useFocusNav()
   const [fields, setFields] = useState<Field[]>([])
   const [backfillDone, setBackfillDone] = useState(false)
   const [plantedSort, setPlantedSort] = useState<FieldSortMode>(0)
@@ -185,8 +191,26 @@ export function DashboardPage() {
   function renderFieldList(list: Field[]) {
     return (
       <ul className="field-list">
-        {list.map((field) => (
-          <li key={field.id} className="field-list-item">
+        {list.map((field) => {
+          const subtitle = [
+            field.area?.trim() || null,
+            field.species?.trim() || null,
+            field.donum !== undefined
+              ? `${field.donum.toLocaleString('tr-TR')} dönüm`
+              : null,
+            `${field.rowCount}×${field.colCount}`,
+            countsReady
+              ? `${activeCount(field).toLocaleString('tr-TR')} ağaç`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+          return (
+          <li
+            key={field.id}
+            className="field-list-item"
+            data-focus-id={focusDomId('field', field.id)}
+          >
             <Link
               to={`/fields/${field.id}`}
               className={`field-card ${fieldColorClass(field.name)}`}
@@ -196,21 +220,19 @@ export function DashboardPage() {
                   <IconFields />
                 </HeadingIcon>
               </span>
-              <strong>{field.name}</strong>
+              <strong>
+                <HighlightText
+                  text={field.name}
+                  query={focus?.highlight}
+                  active={focus?.isTarget('field', field.id)}
+                />
+              </strong>
               <span className="muted">
-                {[
-                  field.area?.trim() || null,
-                  field.species?.trim() || null,
-                  field.donum !== undefined
-                    ? `${field.donum.toLocaleString('tr-TR')} dönüm`
-                    : null,
-                  `${field.rowCount}×${field.colCount}`,
-                  countsReady
-                    ? `${activeCount(field).toLocaleString('tr-TR')} ağaç`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                <HighlightText
+                  text={subtitle}
+                  query={focus?.highlight}
+                  active={focus?.isTarget('field', field.id)}
+                />
               </span>
             </Link>
             <button
@@ -226,7 +248,8 @@ export function DashboardPage() {
               <IconTrash />
             </button>
           </li>
-        ))}
+          )
+        })}
       </ul>
     )
   }
@@ -389,6 +412,7 @@ export function DashboardPage() {
         title="Kayıtlı Tarlalar"
         icon={<IconTree />}
         tone="olive"
+        sectionId="fields-list"
         bodyClassName="stack"
       >
         {fields.length === 0 ? (

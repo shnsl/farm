@@ -8,6 +8,11 @@ import {
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconSpray, SectionTitle } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type {
   Field,
   PesticideExpenseEvent,
@@ -131,6 +136,7 @@ export function FarmPesticidePanel({
 
   const [stockModalOpen, setStockModalOpen] = useState(false)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     const unsubStock = subscribePesticideStock(
@@ -148,6 +154,18 @@ export function FarmPesticidePanel({
       unsubExp()
     }
   }, [farmId])
+
+  useEffect(() => {
+    if (!focus?.entityId) return
+    if (focus.kind === 'pesticideStock') {
+      const idx = stock.findIndex((s) => s.id === focus.entityId)
+      if (idx >= PREVIEW_LIMIT) setStockModalOpen(true)
+    }
+    if (focus.kind === 'pesticideExpense') {
+      const idx = expenses.findIndex((e) => e.id === focus.entityId)
+      if (idx >= PREVIEW_LIMIT) setExpenseModalOpen(true)
+    }
+  }, [focus?.token, focus?.kind, focus?.entityId, stock, expenses])
 
   const totalExpense = useMemo(
     () => expenses.reduce((sum, e) => sum + e.cost, 0),
@@ -385,20 +403,23 @@ export function FarmPesticidePanel({
     }
 
     return (
-      <li key={item.id}>
+      <li key={item.id} data-focus-id={focusDomId('pesticideStock', item.id)}>
         <span>
-          <strong>{item.name}</strong>
-          {' · '}
-          miat {item.expiresAt.slice(0, 10)}
-          {' · '}
-          {formatQty(item.quantityPieces)} tane
-          {' · '}
-          {formatQty(item.quantityMl)} ml
-          {' · '}
-          {item.treeSpecies}
-          {' · '}
-          {formatQty(item.doseWaterLiters)} lt suya
-          {item.notes ? ` · ${item.notes}` : ''}
+          <HighlightText
+            text={[
+              item.name,
+              `miat ${item.expiresAt.slice(0, 10)}`,
+              `${formatQty(item.quantityPieces)} tane`,
+              `${formatQty(item.quantityMl)} ml`,
+              item.treeSpecies,
+              `${formatQty(item.doseWaterLiters)} lt suya`,
+              item.notes,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            query={focus?.highlight}
+            active={focus?.isTarget('pesticideStock', item.id)}
+          />
         </span>
         <div className="bulk-actions">
           <button
@@ -496,14 +517,21 @@ export function FarmPesticidePanel({
       : undefined
 
     return (
-      <li key={item.id}>
+      <li key={item.id} data-focus-id={focusDomId('pesticideExpense', item.id)}>
         <span>
-          {item.doneAt.slice(0, 10)}
-          {fieldName ? ` · ${fieldName}` : ''}
-          {item.pesticideName ? ` · ${item.pesticideName}` : ''}
-          {' · '}
-          {formatMoney(item.cost)}
-          {item.notes ? ` · ${item.notes}` : ''}
+          <HighlightText
+            text={[
+              item.doneAt.slice(0, 10),
+              fieldName,
+              item.pesticideName,
+              formatMoney(item.cost),
+              item.notes,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            query={focus?.highlight}
+            active={focus?.isTarget('pesticideExpense', item.id)}
+          />
         </span>
         <div className="bulk-actions">
           <button
@@ -546,6 +574,7 @@ export function FarmPesticidePanel({
       title="Tarım İlaçları"
       icon={<IconSpray />}
       tone="teal"
+      sectionId="pesticide"
       bodyClassName="stack"
     >
       <p className="muted small">
@@ -574,7 +603,7 @@ export function FarmPesticidePanel({
         </div>
       </div>
 
-      <CollapseSection title="Depo Stoğu" icon={<IconSpray />} tone="olive">
+      <CollapseSection title="Depo Stoğu" icon={<IconSpray />} tone="olive" sectionId="pesticide-stock">
         <form className="form-grid" onSubmit={onAddStock}>
           <label>
             İlaç adı
@@ -676,6 +705,7 @@ export function FarmPesticidePanel({
         title="İlaçlama Masrafları"
         icon={<IconSpray />}
         tone="amber"
+        sectionId="pesticide-expenses"
       >
         <form className="form-grid" onSubmit={onAddExpense}>
           <label>

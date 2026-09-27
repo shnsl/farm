@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useFocusNav } from '../lib/focusNav'
 import { HeadingIcon, type IconTone } from './Icons'
 
 export function CollapseSection({
@@ -6,6 +7,7 @@ export function CollapseSection({
   icon,
   tone = 'green',
   defaultOpen = false,
+  sectionId,
   className,
   bodyClassName,
   children,
@@ -14,11 +16,21 @@ export function CollapseSection({
   icon: ReactNode
   tone?: IconTone
   defaultOpen?: boolean
+  /** Arama odağında otomatik açılacak bölüm kimliği */
+  sectionId?: string
   className?: string
   bodyClassName?: string
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const focus = useFocusNav()
+  const forceOpen = Boolean(
+    sectionId && focus?.openSections.has(sectionId),
+  )
+  const [open, setOpen] = useState(defaultOpen || forceOpen)
+
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen, focus?.token])
 
   return (
     <div
@@ -29,6 +41,7 @@ export function CollapseSection({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-section-id={sectionId || undefined}
     >
       <button
         type="button"

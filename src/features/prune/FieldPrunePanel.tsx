@@ -23,6 +23,11 @@ import {
 } from './api'
 import { aggregatePruneByYear, YearlyPruneChart } from './YearlyPruneChart'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { PruneEvent } from '../../types'
 
 interface FieldPrunePanelProps {
@@ -111,6 +116,7 @@ export function FieldPrunePanel({
   const [editDurationDays, setEditDurationDays] = useState(1)
   const [editNotes, setEditNotes] = useState('')
   const [chartModalOpen, setChartModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     return subscribePruneEvents(
@@ -122,7 +128,16 @@ export function FieldPrunePanel({
   }, [farmId, fieldId])
 
   const latest = events[0] ?? null
-  const preview = useMemo(() => events.slice(0, PREVIEW_LIMIT), [events])
+  const preview = useMemo(() => {
+    if (
+      focus?.kind === 'prune' &&
+      focus.entityId &&
+      events.some((e) => e.id === focus.entityId)
+    ) {
+      return events
+    }
+    return events.slice(0, PREVIEW_LIMIT)
+  }, [events, focus?.kind, focus?.entityId, focus?.token])
   const byYear = useMemo(() => aggregatePruneByYear(events), [events])
 
   function startEdit(event: PruneEvent) {
@@ -201,6 +216,7 @@ export function FieldPrunePanel({
       title="Budama"
       icon={<IconPrune />}
       tone="violet"
+      sectionId="prune"
       bodyClassName="stack"
     >
       {error && (
@@ -234,7 +250,7 @@ export function FieldPrunePanel({
         )}
       </div>
 
-      <CollapseSection title="Budama Kaydı" icon={<IconBranch />} tone="rose">
+      <CollapseSection title="Budama Kaydı" icon={<IconBranch />} tone="rose" sectionId="prune-records">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Budama tarihi
@@ -466,14 +482,23 @@ export function FieldPrunePanel({
                   </form>
                 </li>
               ) : (
-                <li key={item.id}>
+                <li key={item.id} data-focus-id={focusDomId('prune', item.id)}>
                   <span>
-                    {item.doneAt.slice(0, 10)} · {item.workerCount} işçi ·{' '}
-                    {item.foremanName} ({item.foremanPhone}) ·{' '}
-                    {formatMoney(item.dailyWage)} yevmiye ·{' '}
-                    {formatDays(item.durationDays)} gün · toplam{' '}
-                    {formatMoney(pruneLaborCost(item))}
-                    {item.notes ? ` · ${item.notes}` : ''}
+                    <HighlightText
+                      text={[
+                        item.doneAt.slice(0, 10),
+                        `${item.workerCount} işçi`,
+                        `${item.foremanName} (${item.foremanPhone})`,
+                        `${formatMoney(item.dailyWage)} yevmiye`,
+                        `${formatDays(item.durationDays)} gün`,
+                        `toplam ${formatMoney(pruneLaborCost(item))}`,
+                        item.notes,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      query={focus?.highlight}
+                      active={focus?.isTarget('prune', item.id)}
+                    />
                   </span>
                   <div className="table-row-actions">
                     <button

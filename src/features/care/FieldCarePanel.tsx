@@ -25,6 +25,11 @@ import {
   YearlyFertilizeChart,
 } from './YearlyFertilizeChart'
 import { confirmDelete } from '../../lib/confirmDelete'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { FertilizeEvent } from '../../types'
 
 interface FieldCarePanelProps {
@@ -104,6 +109,7 @@ export function FieldCarePanel({
   const [editCost, setEditCost] = useState(0)
   const [editNotes, setEditNotes] = useState('')
   const [chartModalOpen, setChartModalOpen] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     return subscribeFertilizeEvents(
@@ -115,7 +121,16 @@ export function FieldCarePanel({
   }, [farmId, fieldId])
 
   const latest = events[0] ?? null
-  const preview = useMemo(() => events.slice(0, PREVIEW_LIMIT), [events])
+  const preview = useMemo(() => {
+    if (
+      focus?.kind === 'fertilize' &&
+      focus.entityId &&
+      events.some((e) => e.id === focus.entityId)
+    ) {
+      return events
+    }
+    return events.slice(0, PREVIEW_LIMIT)
+  }, [events, focus?.kind, focus?.entityId, focus?.token])
   const byYear = useMemo(() => aggregateFertilizeByYear(events), [events])
 
   function startEdit(event: FertilizeEvent) {
@@ -188,6 +203,7 @@ export function FieldCarePanel({
       title="Gübreleme ve Bakım"
       icon={<IconFertilizer />}
       tone="teal"
+      sectionId="care"
       bodyClassName="stack"
     >
       {error && (
@@ -213,7 +229,7 @@ export function FieldCarePanel({
         )}
       </div>
 
-      <CollapseSection title="Gübreleme Kaydı" icon={<IconDrop />} tone="green">
+      <CollapseSection title="Gübreleme Kaydı" icon={<IconDrop />} tone="green" sectionId="fertilize-records">
         <form className="form-grid" onSubmit={onAdd}>
           <label>
             Gübreleme tarihi
@@ -374,11 +390,20 @@ export function FieldCarePanel({
                   </form>
                 </li>
               ) : (
-                <li key={item.id}>
+                <li key={item.id} data-focus-id={focusDomId('fertilize', item.id)}>
                   <span>
-                    {item.doneAt.slice(0, 10)} · {item.fertilizerType} ·{' '}
-                    {formatMoney(item.cost)}
-                    {item.notes ? ` · ${item.notes}` : ''}
+                    <HighlightText
+                      text={[
+                        item.doneAt.slice(0, 10),
+                        item.fertilizerType,
+                        formatMoney(item.cost),
+                        item.notes,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      query={focus?.highlight}
+                      active={focus?.isTarget('fertilize', item.id)}
+                    />
                   </span>
                   <div className="table-row-actions">
                     <button

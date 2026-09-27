@@ -7,8 +7,15 @@ import {
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconArea, IconTrash, IconWallet } from '../../components/Icons'
+import {
+  focusDomId,
+  HighlightText,
+  useFocusNav,
+} from '../../lib/focusNav'
 import type { SaleEvent, WarehouseStockItem } from '../../types'
 import {
+  addManualWarehouseStock,
+  createManualStockSchema,
   createSale,
   createSaleSchema,
   deleteSale,
@@ -17,6 +24,7 @@ import {
   saleEarnings,
   subscribeSales,
   subscribeWarehouseStock,
+  syncHarvestStockStartedAt,
 } from './api'
 import {
   formatStockAmount,
@@ -96,6 +104,7 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const focus = useFocusNav()
 
   const [doneAt, setDoneAt] = useState(
     () => new Date().toISOString().slice(0, 10),
@@ -108,6 +117,14 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     useState<WarehouseStockItem | null>(null)
   const [deletingStock, setDeletingStock] = useState(false)
 
+  const [manualName, setManualName] = useState('')
+  const [manualKg, setManualKg] = useState(0)
+  const [manualStartedAt, setManualStartedAt] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  )
+  const [manualNotes, setManualNotes] = useState('')
+  const [savingManual, setSavingManual] = useState(false)
+
   useEffect(() => {
     return subscribeWarehouseStock(
       farmId,
@@ -118,16 +135,21 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
 
   useEffect(() => {
     let cancelled = false
-    void ensureFistikWarehouseSplit(farmId).catch((err: unknown) => {
-      if (!cancelled) {
-        console.error(err)
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Fıstık depo ayrımı uygulanamadı',
-        )
+    void (async () => {
+      try {
+        await ensureFistikWarehouseSplit(farmId)
+        await syncHarvestStockStartedAt(farmId)
+      } catch (err: unknown) {
+        if (!cancelled) {
+          console.error(err)
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Depo stok tarihleri güncellenemedi',
+          )
+        }
       }
-    })
+    })()
     return () => {
       cancelled = true
     }
@@ -223,11 +245,40 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     }
   }
 
+  async function onAddManual(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setInfo(null)
+    const parsed = createManualStockSchema.safeParse({
+      species: manualName,
+      kg: manualKg,
+      startedAt: manualStartedAt,
+      notes: manualNotes || undefined,
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Form hatalı')
+      return
+    }
+    setSavingManual(true)
+    try {
+      await addManualWarehouseStock(farmId, parsed.data, userId)
+      setManualName('')
+      setManualKg(0)
+      setManualNotes('')
+      setInfo(`“${parsed.data.species}” depoya eklendi; satıştan seçilebilir.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Depo ürünü eklenemedi')
+    } finally {
+      setSavingManual(false)
+    }
+  }
+
   return (
     <CollapseSection
       title="Depo"
       icon={<IconArea />}
       tone="olive"
+      sectionId="depot"
       bodyClassName="stack"
     >
       {error && (
@@ -238,10 +289,59 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
       {info && <p className="success">{info}</p>}
 
       <p className="muted small">
-        Hasattan girilen ürünler çeşit bazında burada birikir. Zeytinyağı hasat
-        kaydındaki tane kg ÷ verim ile litredir; depoda aşağı yuvarlanmış teneke
-        + kalan lt ve toplam lt gösterilir (1 teneke = {TENEKE_LITERS} lt).
+        Hasattan gelen ürünler otomatik birikir. Ayrıca buğday gibi ürünleri elle
+        ekleyebilirsin; hepsi aşağıdaki satış formundan satılabilir. Zeytinyağı
+        hasat kaydındaki tane kg ÷ verim ile litredir; depoda aşağı yuvarlanmış
+        teneke + kalan lt ve toplam lt gösterilir (1 teneke = {TENEKE_LITERS}{' '}
+        lt).
       </p>
+
+      <form className="form-grid" onSubmit={onAddManual}>
+        <label className="span-2">
+          Ürün adı
+          <input
+            value={manualName}
+            onChange={(e) => setManualName(e.target.value)}
+            placeholder="Örn. Buğday"
+            required
+          />
+        </label>
+        <label>
+          Tahmini stok (kg)
+          <input
+            type="number"
+            min={0.01}
+            step={0.01}
+            value={manualKg || ''}
+            onChange={(e) => setManualKg(Number(e.target.value))}
+            required
+          />
+        </label>
+        <label>
+          Stok başlangıç tarihi
+          <input
+            type="date"
+            value={manualStartedAt}
+            onChange={(e) => setManualStartedAt(e.target.value)}
+            required
+          />
+        </label>
+        <label className="span-2">
+          Not
+          <input
+            value={manualNotes}
+            onChange={(e) => setManualNotes(e.target.value)}
+            placeholder="Opsiyonel"
+          />
+        </label>
+        <button
+          className="btn primary"
+          type="submit"
+          disabled={savingManual}
+        >
+          {savingManual ? 'Ekleniyor…' : 'Depoya ekle'}
+        </button>
+      </form>
 
       {available.length === 0 ? (
         <p className="muted small">Depoda bekleyen ürün yok.</p>
@@ -250,16 +350,46 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Çeşit</th>
+                <th>Ürün</th>
                 <th>Stok</th>
+                <th>Başlangıç</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {available.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.species}</td>
-                  <td>{formatStockAmount(item.species, item.kg)}</td>
+                <tr
+                  key={item.id}
+                  data-focus-id={focusDomId('warehouseStock', item.id)}
+                >
+                  <td>
+                    <HighlightText
+                      text={item.species}
+                      query={focus?.highlight}
+                      active={focus?.isTarget('warehouseStock', item.id)}
+                    />
+                    {item.source === 'manual' ? (
+                      <span className="muted small"> · elle</span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <HighlightText
+                      text={formatStockAmount(item.species, item.kg)}
+                      query={focus?.highlight}
+                      active={focus?.isTarget('warehouseStock', item.id)}
+                    />
+                  </td>
+                  <td>
+                    {item.startedAt ? (
+                      <HighlightText
+                        text={item.startedAt.slice(0, 10)}
+                        query={focus?.highlight}
+                        active={focus?.isTarget('warehouseStock', item.id)}
+                      />
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td>
                     <div className="table-row-actions">
                       <button
@@ -430,6 +560,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<SaleEvent | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const focus = useFocusNav()
 
   useEffect(() => {
     return subscribeSales(farmId, setSales, (err) => setError(err.message))
@@ -471,6 +602,7 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
       title="Satışlar"
       icon={<IconWallet />}
       tone="amber"
+      sectionId="sales"
       bodyClassName="stack"
     >
       {error && (
@@ -509,24 +641,39 @@ export function FarmEarningsPanel({ farmId }: FarmEarningsPanelProps) {
         <p className="muted small">Henüz satış kaydı yok.</p>
       ) : (
         <ul className="stack-gap">
-          {sales.slice(0, 12).map((item) => (
-            <li key={item.id}>
-              <span>
-                {item.doneAt.slice(0, 10)} · {item.species} ·{' '}
-                {formatSaleLine(item)}
-                {item.notes ? ` · ${item.notes}` : ''}
-              </span>
-              <div className="bulk-actions">
-                <button
-                  type="button"
-                  className="btn ghost btn-compact"
-                  onClick={() => setPendingDelete(item)}
-                >
-                  Sil
-                </button>
-              </div>
-            </li>
-          ))}
+          {(focus?.kind === 'sale' && focus.entityId
+            ? sales
+            : sales.slice(0, 12)
+          ).map((item) => {
+            const line = [
+              item.doneAt.slice(0, 10),
+              item.species,
+              formatSaleLine(item),
+              item.notes,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            return (
+              <li key={item.id} data-focus-id={focusDomId('sale', item.id)}>
+                <span>
+                  <HighlightText
+                    text={line}
+                    query={focus?.highlight}
+                    active={focus?.isTarget('sale', item.id)}
+                  />
+                </span>
+                <div className="bulk-actions">
+                  <button
+                    type="button"
+                    className="btn ghost btn-compact"
+                    onClick={() => setPendingDelete(item)}
+                  >
+                    Sil
+                  </button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
 

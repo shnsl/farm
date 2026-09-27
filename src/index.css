@@ -1,5 +1,5 @@
 @font-face {
-  /* Yer tutucu; asıl yüzler FontProvider tarafından enjekte edilir */
+  /* Yer tutucu; asÄ±l yÃ¼zler FontProvider tarafÄ±ndan enjekte edilir */
   font-family: Inter;
   src: url('/fonts/Inter-Regular.otf') format('opentype');
   font-weight: 400;
@@ -503,7 +503,7 @@ textarea:focus {
   width: min(1200px, 100%);
   margin: 0 auto;
   padding: 1.25rem;
-  /* Alttaki bölümlerin (ör. Satışlar) ekran ortasına kaydırılabilmesi için */
+  /* Alttaki bÃ¶lÃ¼mlerin (Ã¶r. SatÄ±Ålar) ekran ortasÄ±na kaydÄ±rÄ±labilmesi iÃ§in */
   padding-bottom: calc(40vh + env(safe-area-inset-bottom, 0px));
 }
 
@@ -1993,5 +1993,301 @@ html[data-theme='dark'] .stats-spend-general {
 
   .stats-summary-card {
     padding: 0.8rem 0.35rem 0.5rem;
+  }
+}
+
+/* Arama odaðý: kayýt satýrý nabýz + eþleþen metin yanýp söner */
+@keyframes focus-target-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 120, 70, 0);
+    background-color: transparent;
+  }
+  25%,
+  75% {
+    box-shadow: 0 0 0 3px rgba(34, 120, 70, 0.45);
+    background-color: rgba(34, 120, 70, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(34, 120, 70, 0.25);
+    background-color: rgba(34, 120, 70, 0.18);
+  }
+}
+
+@keyframes focus-mark-blink {
+  0%,
+  100% {
+    background-color: rgba(250, 204, 21, 0.95);
+    color: inherit;
+  }
+  50% {
+    background-color: rgba(34, 120, 70, 0.85);
+    color: #fff;
+  }
+}
+
+.is-focus-target {
+  border-radius: 8px;
+  animation: focus-target-pulse 1s ease-in-out 3;
+}
+
+.tree-grid .cell.is-focus-target {
+  border-radius: 4px;
+  outline: 2px solid rgba(34, 120, 70, 0.9);
+  z-index: 2;
+}
+
+mark.focus-mark {
+  padding: 0 0.12em;
+  border-radius: 3px;
+  background-color: rgba(250, 204, 21, 0.95);
+  color: inherit;
+  animation: focus-mark-blink 0.7s ease-in-out 5;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Borçlar listesi: alacak / verecek yan yana, kiþi gruplarý */
+.debts-list-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.debts-list-col {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--bg-accent) 55%, transparent);
+  min-width: 0;
+}
+
+.debts-list-col-title {
+  margin: 0 0 0.15rem;
+  font-size: 1.05rem;
+}
+
+.debts-list-col-hint {
+  margin: 0 0 0.75rem;
+}
+
+.debt-person-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.debt-person-block {
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+
+.debt-person-block:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.debt-person-name {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.debt-person-items {
+  margin: 0;
+}
+
+.debt-item {
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0.2rem 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.debt-item-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.debt-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* Altın — sıcak metalik altın */
+.debt-type-gold {
+  background: color-mix(in srgb, #d4a017 22%, var(--surface));
+  border-color: color-mix(in srgb, #c9a227 45%, var(--line));
+}
+
+.debt-type-gold .debt-type-badge {
+  color: #7a5a08;
+  background: color-mix(in srgb, #f0d060 55%, #fff8dc);
+}
+
+/* Nakit — yeşil / para */
+.debt-type-cash {
+  background: color-mix(in srgb, #2f8f4e 16%, var(--surface));
+  border-color: color-mix(in srgb, #2f8f4e 40%, var(--line));
+}
+
+.debt-type-cash .debt-type-badge {
+  color: #1d5c32;
+  background: color-mix(in srgb, #6fcf97 35%, #e8f7ee);
+}
+
+/* Döviz — mavi */
+.debt-type-currency {
+  background: color-mix(in srgb, #2f6fad 16%, var(--surface));
+  border-color: color-mix(in srgb, #2f6fad 40%, var(--line));
+}
+
+.debt-type-currency .debt-type-badge {
+  color: #1a4a7a;
+  background: color-mix(in srgb, #7eb6e8 40%, #e8f2fb);
+}
+
+/* Diğer — nötr morumsu gri */
+.debt-type-other {
+  background: color-mix(in srgb, #6b6578 14%, var(--surface));
+  border-color: color-mix(in srgb, #6b6578 35%, var(--line));
+}
+
+.debt-type-other .debt-type-badge {
+  color: #433e4d;
+  background: color-mix(in srgb, #b0a8bc 30%, #f0eef2);
+}
+
+.debt-item.is-paid {
+  opacity: 0.72;
+}
+
+html[data-theme='dark'] .debt-type-gold {
+  background: color-mix(in srgb, #d4a017 18%, var(--surface));
+}
+
+html[data-theme='dark'] .debt-type-gold .debt-type-badge {
+  color: #f0d78c;
+  background: color-mix(in srgb, #d4a017 28%, #2a2410);
+}
+
+html[data-theme='dark'] .debt-type-cash .debt-type-badge {
+  color: #9ee0b4;
+  background: color-mix(in srgb, #2f8f4e 30%, #142018);
+}
+
+html[data-theme='dark'] .debt-type-currency .debt-type-badge {
+  color: #9ec5ea;
+  background: color-mix(in srgb, #2f6fad 30%, #121a22);
+}
+
+html[data-theme='dark'] .debt-type-other .debt-type-badge {
+  color: #cfc8d8;
+  background: color-mix(in srgb, #6b6578 28%, #1c1a20);
+}
+
+.debt-totals {
+  margin-top: 0.9rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--line);
+}
+
+.debt-totals strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.debt-totals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.debt-totals-list li,
+.debt-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+@media (max-width: 720px) {
+  .debts-list-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.debt-tl-summary {
+  margin-top: 1rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-accent) 40%, transparent);
+}
+
+.debt-tl-summary-title {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+}
+
+.debt-tl-summary-grid {
+  list-style: none;
+  margin: 0 0 0.65rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.debt-tl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.debt-tl-card strong {
+  font-size: 1.05rem;
+}
+
+.debt-tl-card strong.is-negative {
+  color: #a33;
+}
+
+.debt-tl-receivable {
+  border-color: color-mix(in srgb, #2f8f4e 40%, var(--line));
+}
+
+.debt-tl-payable {
+  border-color: color-mix(in srgb, #c07a1a 40%, var(--line));
+}
+
+@media (max-width: 720px) {
+  .debt-tl-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
