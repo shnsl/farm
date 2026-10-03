@@ -202,17 +202,43 @@ export function WheelColumn({
     if (!el) return
     let frame = 0
     let settleTimer = 0
+    let idleRaf = 0
     let wheelAcc = 0
     let wheelLock = false
     let wheelUnlockTimer = 0
+    /** px/ms — scrollTop artış yönü pozitif */
+    let releaseVelocity = 0
+    let sampleScroll = el.scrollTop
+    let sampleTime = 0
+    let liveVelocity = 0
+
+    function maxVisual() {
+      const n = optionsRef.current.length
+      return loopingRef.current
+        ? Math.max(0, LOOP_COPIES * n - 1)
+        : Math.max(0, n - 1)
+    }
 
     function visualFromScroll() {
       const step = itemHRef.current || DEFAULT_ITEM_H
-      const n = optionsRef.current.length
-      const maxVisual = loopingRef.current
-        ? Math.max(0, LOOP_COPIES * n - 1)
-        : Math.max(0, n - 1)
-      return clamp(Math.round(el!.scrollTop / step), 0, maxVisual)
+      return clamp(Math.round(el!.scrollTop / step), 0, maxVisual())
+    }
+
+    /** Bırakış hızına göre hedef satır (hızlı fırlatmada yönü tercih eder) */
+    function targetVisualFromVelocity(velPxPerMs: number) {
+      const step = itemHRef.current || DEFAULT_ITEM_H
+      const raw = el!.scrollTop / step
+      const abs = Math.abs(velPxPerMs)
+      // ~80–180ms coast tahmini; hızlıysa daha uzağa projekte et
+      const coastMs = abs > 0.8 ? 180 : abs > 0.35 ? 130 : 0
+      const projected = raw + (velPxPerMs * coastMs) / step
+      if (abs > 0.35) {
+        // Yönlü yuvarlama: arada kalmayı azalt
+        const biased =
+          velPxPerMs > 0 ? Math.ceil(projected - 0.15) : Math.floor(projected + 0.15)
+        return clamp(biased, 0, maxVisual())
+      }
+      return clamp(Math.round(projected), 0, maxVisual())
     }
 
     function logicalFromVisual(visual: number) {
@@ -230,56 +256,141 @@ export function WheelColumn({
       setPaintIndex(logical)
     }
 
-    function settle() {
+    /** Native momentum’u kesip satıra kilitle */
+    function snapHard(visual: number) {
+      const step = itemHRef.current || DEFAULT_ITEM_H
+      const top = visual * step
+      suppressScrollRef.current = true
+      window.clearTimeout(suppressTimerRef.current)
+      const prevOverflow = el!.style.overflow
+      el!.style.overflow = 'hidden'
+      el!.scrollTop = top
+      // Bir frame sonra overflow geri — momentum ölür
+      window.requestAnimationFrame(() => {
+        el!.style.overflow = prevOverflow
+        el!.scrollTop = top
+        suppressTimerRef.current = window.setTimeout(() => {
+          if (Math.abs(el!.scrollTop - top) > 1) el!.scrollTop = top
+          suppressScrollRef.current = false
+        }, 48)
+      })
+    }
+
+    function settle(vel = releaseVelocity) {
       if (suppressScrollRef.current || touchActiveRef.current) return
       const n = optionsRef.current.length
       if (n <= 0) return
-      const visual = visualFromScroll()
+      const visual = targetVisualFromVelocity(vel)
       const logical = logicalFromVisual(visual)
       commitLogical(logical)
+      releaseVelocity = 0
 
       if (loopingRef.current) {
         const copy = Math.floor(visual / n)
         if (copy <= 0 || copy >= LOOP_COPIES - 1) {
-          scrollToVisual(midBaseRef.current + logical, 'auto')
+          snapHard(midBaseRef.current + logical)
         } else {
-          // Anlık snap — smooth mobilde momentum ile çakışır
-          scrollToVisual(visual, 'auto')
+          snapHard(visual)
         }
       } else {
-        scrollToVisual(logical, 'auto')
+        snapHard(logical)
       }
       interactingRef.current = false
     }
 
-    function scheduleSettle(delay = 140) {
+    function cancelIdleWatch() {
       window.clearTimeout(settleTimer)
-      settleTimer = window.setTimeout(settle, delay)
+      window.cancelAnimationFrame(idleRaf)
+    }
+
+    /** Momentum bitene kadar bekle, sonra hız yönlü fokus */
+    function waitIdleThenSettle() {
+      cancelIdleWatch()
+      let lastTop = el!.scrollTop
+      let stableFrames = 0
+      const started = performance.now()
+
+      function tick() {
+        if (touchActiveRef.current) return
+        const now = performance.now()
+        const top = el!.scrollTop
+        const dt = Math.max(1, now - sampleTime)
+        if (sampleTime > 0) {
+          liveVelocity = (top - sampleScroll) / dt
+        }
+        sampleScroll = top
+        sampleTime = now
+
+        if (Math.abs(top - lastTop) < 0.6) {
+          stableFrames += 1
+        } else {
+          stableFrames = 0
+          lastTop = top
+        }
+
+        // Duruldu veya uzun sürdü — odakla
+        if (stableFrames >= 3 || now - started > 420) {
+          settle(Math.abs(releaseVelocity) > 0.12 ? releaseVelocity : liveVelocity)
+          return
+        }
+        idleRaf = window.requestAnimationFrame(tick)
+      }
+
+      // Momentum’un başlaması için kısa gecikme
+      settleTimer = window.setTimeout(() => {
+        lastTop = el!.scrollTop
+        sampleScroll = lastTop
+        sampleTime = performance.now()
+        idleRaf = window.requestAnimationFrame(tick)
+      }, 32)
     }
 
     function onScroll() {
       if (suppressScrollRef.current) return
       interactingRef.current = true
+      const now = performance.now()
+      if (sampleTime > 0) {
+        const dt = Math.max(1, now - sampleTime)
+        liveVelocity = (el!.scrollTop - sampleScroll) / dt
+      }
+      sampleScroll = el!.scrollTop
+      sampleTime = now
+
       window.cancelAnimationFrame(frame)
       frame = window.requestAnimationFrame(() => {
         if (suppressScrollRef.current) return
         const logical = logicalFromVisual(visualFromScroll())
         if (logical !== paintIndexRef.current) setPaintIndex(logical)
       })
-      // Dokunma sürerken snap yok; bırakınca settle
-      if (!touchActiveRef.current) scheduleSettle(140)
+      // Dokunma yoksa (momentum / trackpad): idle sonrası snap
+      if (!touchActiveRef.current) waitIdleThenSettle()
     }
 
     function onTouchStart() {
       touchActiveRef.current = true
       interactingRef.current = true
-      window.clearTimeout(settleTimer)
+      cancelIdleWatch()
+      releaseVelocity = 0
+      liveVelocity = 0
+      sampleScroll = el!.scrollTop
+      sampleTime = performance.now()
+    }
+
+    function onTouchMove() {
+      const now = performance.now()
+      const top = el!.scrollTop
+      if (sampleTime > 0) {
+        const dt = Math.max(1, now - sampleTime)
+        liveVelocity = (top - sampleScroll) / dt
+      }
+      sampleScroll = top
+      sampleTime = now
     }
 
     function onTouchEnd() {
+      releaseVelocity = liveVelocity
       touchActiveRef.current = false
-      // Momentum bitsin diye biraz bekle
-      scheduleSettle(160)
+      waitIdleThenSettle()
     }
 
     /** Fare tekerleği / trackpad: her adımda tek seçenek */
@@ -311,15 +422,18 @@ export function WheelColumn({
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
     el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
     el.addEventListener('touchend', onTouchEnd, { passive: true })
     el.addEventListener('touchcancel', onTouchEnd, { passive: true })
     return () => {
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('wheel', onWheel)
       el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
       el.removeEventListener('touchcancel', onTouchEnd)
       window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(idleRaf)
       window.clearTimeout(settleTimer)
       window.clearTimeout(wheelUnlockTimer)
       window.clearTimeout(suppressTimerRef.current)
