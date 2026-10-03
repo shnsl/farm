@@ -292,9 +292,6 @@ export function DashboardPage() {
           <PageTitle icon={<IconFields />} tone="green">
             Tarlalar
           </PageTitle>
-          <p className="muted">
-            Her tarla satır (A…) × sütun (1…) hücre grid’i ile takip edilir.
-          </p>
         </div>
       </header>
 

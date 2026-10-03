@@ -314,6 +314,13 @@ export interface DebtEvent {
   dueAt?: string
   /** Gerçek ödenme zamanı */
   paidAt?: string
+  /**
+   * Kayıt anındaki birim TRY kuru (TL dışı döviz/altın).
+   * Alacakta alış, verecekte satış fiyatı.
+   */
+  rateAtTakenTry?: number
+  /** Ödenme anındaki birim TRY kuru (aynı yön kuralıyla) */
+  rateAtPaidTry?: number
   notes?: string
   createdBy: string
   createdAt: string

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import { IconFuel, SectionTitle } from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
 import {
@@ -208,12 +209,12 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
           <form className="form-grid" onSubmit={onSaveEdit}>
             <label>
               Tarih
-              <input
-                type="date"
-                value={editDoneAt}
-                onChange={(ev) => setEditDoneAt(ev.target.value)}
-                required
-              />
+              <WheelDateSelect
+              title="Tarih"
+              value={editDoneAt}
+              onChange={setEditDoneAt}
+              required
+            />
             </label>
             <label>
               Litre (lt)
@@ -364,10 +365,10 @@ export function FarmFuelPanel({ farmId, userId }: FarmFuelPanelProps) {
         <form className="form-grid" onSubmit={onAddPurchase}>
           <label>
             Alım zamanı
-            <input
-              type="date"
+            <WheelDateSelect
+              title="Tarih"
               value={purchaseAt}
-              onChange={(e) => setPurchaseAt(e.target.value)}
+              onChange={setPurchaseAt}
               required
             />
           </label>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { WheelSelect } from '../../components/WheelSelect'
 import {
   defaultHarvestSpecies,
   harvestProductsForTreeSpecies,
@@ -21,34 +22,34 @@ export function HarvestSpeciesInput({
   label = 'Çeşit',
 }: HarvestSpeciesInputProps) {
   const options = harvestProductsForTreeSpecies(treeSpecies)
+  const valueKey = value.trim().toLocaleLowerCase('tr-TR')
+  const knownOption = options?.find(
+    (opt) => opt.toLocaleLowerCase('tr-TR') === valueKey,
+  )
   const extra =
     allowExtraValue &&
     value.trim() &&
     options &&
-    !options.includes(value.trim())
+    !knownOption
       ? value.trim()
       : null
 
   if (options) {
+    const wheelOptions = [
+      { value: '', label: 'Seç…' },
+      ...(extra ? [{ value: extra, label: `${extra} (eski)` }] : []),
+      ...options.map((opt) => ({ value: opt, label: opt })),
+    ]
     return (
       <label>
         {label}
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">Seç…</option>
-          {extra && (
-            <option value={extra}>
-              {extra} (eski)
-            </option>
-          )}
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        <WheelSelect
+          title="Çeşit"
+          value={knownOption ?? value}
+          onChange={onChange}
+          options={wheelOptions}
+          placeholder="Seç…"
+        />
       </label>
     )
   }

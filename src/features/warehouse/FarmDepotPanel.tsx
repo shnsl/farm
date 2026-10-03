@@ -7,6 +7,8 @@ import {
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconArea, IconTrash, IconWallet } from '../../components/Icons'
+import { WheelSelect } from '../../components/WheelSelect'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import {
   focusDomId,
   HighlightText,
@@ -15,13 +17,16 @@ import {
 import type { SaleEvent, WarehouseStockItem } from '../../types'
 import {
   addManualWarehouseStock,
+  consolidateWarehouseStockCaseDuplicates,
   createManualStockSchema,
   createSale,
   createSaleSchema,
   deleteSale,
   deleteWarehouseStock,
   ensureFistikWarehouseSplit,
+  normalizeSpeciesKey,
   saleEarnings,
+  sameSpecies,
   subscribeSales,
   subscribeWarehouseStock,
   syncHarvestStockStartedAt,
@@ -138,6 +143,7 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     void (async () => {
       try {
         await ensureFistikWarehouseSplit(farmId)
+        await consolidateWarehouseStockCaseDuplicates(farmId)
         await syncHarvestStockStartedAt(farmId)
       } catch (err: unknown) {
         if (!cancelled) {
@@ -155,15 +161,36 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
     }
   }, [farmId])
 
-  const available = useMemo(
-    () =>
-      stock
-        .filter((s) => s.kg > 0)
-        .sort((a, b) => a.species.localeCompare(b.species, 'tr')),
-    [stock],
-  )
+  const available = useMemo(() => {
+    const merged = new Map<string, WarehouseStockItem>()
+    for (const item of stock) {
+      if (item.kg <= 0) continue
+      const key = normalizeSpeciesKey(item.species)
+      if (!key) continue
+      const prev = merged.get(key)
+      if (!prev) {
+        merged.set(key, item)
+        continue
+      }
+      const prevStarted = prev.startedAt?.slice(0, 10) || ''
+      const nextStarted = item.startedAt?.slice(0, 10) || ''
+      merged.set(key, {
+        ...prev,
+        kg: Number((prev.kg + item.kg).toFixed(2)),
+        startedAt:
+          prevStarted && nextStarted
+            ? prevStarted < nextStarted
+              ? prev.startedAt
+              : item.startedAt
+            : prev.startedAt || item.startedAt,
+      })
+    }
+    return [...merged.values()].sort((a, b) =>
+      a.species.localeCompare(b.species, 'tr'),
+    )
+  }, [stock])
 
-  const selectedStock = available.find((s) => s.species === species)
+  const selectedStock = available.find((s) => sameSpecies(s.species, species))
   const sellingOil = isOliveOilStock(species)
   const oilStock = sellingOil
     ? splitOliveOilTeneke(selectedStock?.kg ?? 0)
@@ -180,7 +207,7 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
       setSpecies('')
       return
     }
-    if (!available.some((s) => s.species === species)) {
+    if (!available.some((s) => sameSpecies(s.species, species))) {
       setSpecies(available[0].species)
     }
   }, [available, species])
@@ -319,12 +346,12 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
         </label>
         <label>
           Stok başlangıç tarihi
-          <input
-            type="date"
-            value={manualStartedAt}
-            onChange={(e) => setManualStartedAt(e.target.value)}
-            required
-          />
+          <WheelDateSelect
+              title="Tarih"
+              value={manualStartedAt}
+              onChange={setManualStartedAt}
+              required
+            />
         </label>
         <label className="span-2">
           Not
@@ -450,29 +477,28 @@ export function FarmDepotPanel({ farmId, userId }: FarmDepotPanelProps) {
         <form className="form-grid" onSubmit={onSell}>
           <label>
             Tarih
-            <input
-              type="date"
+            <WheelDateSelect
+              title="Tarih"
               value={doneAt}
-              onChange={(e) => setDoneAt(e.target.value)}
+              onChange={setDoneAt}
               required
             />
           </label>
           <label>
             Çeşit
-            <select
+            <WheelSelect
+              title="Çeşit"
               value={species}
-              onChange={(e) => {
-                setSpecies(e.target.value)
+              required
+              onChange={(v) => {
+                setSpecies(v)
                 setSoldQty(0)
               }}
-              required
-            >
-              {available.map((item) => (
-                <option key={item.id} value={item.species}>
-                  {item.species} ({formatStockAmount(item.species, item.kg)})
-                </option>
-              ))}
-            </select>
+              options={available.map((item) => ({
+                value: item.species,
+                label: `${item.species} (${formatStockAmount(item.species, item.kg)})`,
+              }))}
+            />
           </label>
           {sellingOil ? (
             <>

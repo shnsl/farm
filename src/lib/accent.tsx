@@ -78,10 +78,21 @@ function applyAccent(id: AccentId, mode: 'light' | 'dark') {
   root.style.setProperty('--bg-bottom', palette.bgBottom)
   root.style.setProperty(
     '--input-bg',
-    mode === 'dark' ? palette.bg : '#ffffff',
+    mode === 'dark'
+      ? id === 'black'
+        ? '#1a1a1a'
+        : palette.bg
+      : '#ffffff',
+  )
+  // Marka rengi açıkken (siyah koyu tema) buton yazısı koyu olmalı
+  root.style.setProperty(
+    '--on-brand',
+    mode === 'dark' && id === 'black' ? '#0a0a0a' : '#ffffff',
   )
   // Android / PWA durum çubuğu seçilen tema rengine uyumlanır
-  applyBrowserChromeColor(palette.brand)
+  applyBrowserChromeColor(
+    mode === 'dark' && id === 'black' ? '#000000' : palette.brand,
+  )
 }
 
 function readStoredAccent(): AccentId {

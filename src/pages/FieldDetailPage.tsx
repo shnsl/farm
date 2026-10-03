@@ -12,6 +12,8 @@ import {
   SectionTitle,
 } from '../components/Icons'
 import { CollapseSection } from '../components/CollapseSection'
+import { WheelDateSelect } from '../components/WheelDateSelect'
+import { WheelSelect } from '../components/WheelSelect'
 import {
   subscribeField,
   updateField,
@@ -878,10 +880,10 @@ export function FieldDetailPage() {
                 <span>Dikim tarihi</span>
               </label>
               {applyPlantedAt && (
-                <input
-                  type="date"
+                <WheelDateSelect
+                  title="Dikim tarihi"
                   value={multiPlantedAt}
-                  onChange={(e) => setMultiPlantedAt(e.target.value)}
+                  onChange={setMultiPlantedAt}
                 />
               )}
 
@@ -894,21 +896,22 @@ export function FieldDetailPage() {
                 <span>Sağlık</span>
               </label>
               {applyHealth && (
-                <select
+                <WheelSelect
+                  title="Sağlık"
                   value={multiHealth}
-                  onChange={(e) =>
-                    setMultiHealth((e.target.value || '') as TreeHealth | '')
+                  onChange={(v) =>
+                    setMultiHealth((v || '') as TreeHealth | '')
                   }
-                >
-                  <option value="">Belirtilmedi</option>
-                  {(Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]).map(
-                    (key) => (
-                      <option key={key} value={key}>
-                        {TREE_HEALTH_LABELS[key]}
-                      </option>
-                    ),
-                  )}
-                </select>
+                  options={[
+                    { value: '', label: 'Belirtilmedi' },
+                    ...(
+                      Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]
+                    ).map((key) => ({
+                      value: key,
+                      label: TREE_HEALTH_LABELS[key],
+                    })),
+                  ]}
+                />
               )}
 
               <label className="checkbox-label">
@@ -1197,10 +1200,10 @@ export function FieldDetailPage() {
                       </label>
                       <label>
                         Dikim tarihi
-                        <input
-                          type="date"
+                        <WheelDateSelect
+                          title="Dikim tarihi"
                           value={editPlantedAt}
-                          onChange={(e) => setEditPlantedAt(e.target.value)}
+                          onChange={setEditPlantedAt}
                         />
                       </label>
                       {formatTreeAge(editPlantedAt) && (
@@ -1210,23 +1213,22 @@ export function FieldDetailPage() {
                       )}
                       <label>
                         Sağlık
-                        <select
+                        <WheelSelect
+                          title="Sağlık"
                           value={editHealth}
-                          onChange={(e) =>
-                            setEditHealth(
-                              (e.target.value || '') as TreeHealth | '',
-                            )
+                          onChange={(v) =>
+                            setEditHealth((v || '') as TreeHealth | '')
                           }
-                        >
-                          <option value="">Belirtilmedi</option>
-                          {(
-                            Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]
-                          ).map((key) => (
-                            <option key={key} value={key}>
-                              {TREE_HEALTH_LABELS[key]}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            { value: '', label: 'Belirtilmedi' },
+                            ...(
+                              Object.keys(TREE_HEALTH_LABELS) as TreeHealth[]
+                            ).map((key) => ({
+                              value: key,
+                              label: TREE_HEALTH_LABELS[key],
+                            })),
+                          ]}
+                        />
                       </label>
                       <label>
                         Notlar

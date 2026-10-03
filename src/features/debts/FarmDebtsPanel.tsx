@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
-import { IconClipboard, IconWallet } from '../../components/Icons'
+import {
+  IconClipboard,
+  IconPencil,
+  IconTrash,
+  IconWallet,
+} from '../../components/Icons'
+import { WheelSelect } from '../../components/WheelSelect'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import { confirmDelete } from '../../lib/confirmDelete'
 import {
   focusDomId,
@@ -9,6 +16,7 @@ import {
 } from '../../lib/focusNav'
 import type { DebtAssetType, DebtDirection, DebtEvent } from '../../types'
 import {
+  backfillDebtHistoricalRates,
   createDebtEvent,
   createDebtSchema,
   debtCounterpartyLabel,
@@ -20,15 +28,19 @@ import {
   DEBT_DIRECTION_LABELS,
   DEBT_GOLD_TYPE_OPTIONS,
   deleteDebtEvent,
+  debtRateSummary,
   formatDebtAmount,
   markDebtPaid,
+  markDebtUnpaid,
   subscribeDebtEvents,
   updateDebtEvent,
 } from './api'
 import {
   fetchMarketRates,
   formatTry,
+  openDebtRateQuotes,
   sumOpenDebtsTry,
+  todayIsoIstanbul,
   type MarketRates,
 } from './marketRates'
 
@@ -38,7 +50,7 @@ interface FarmDebtsPanelProps {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayIsoIstanbul()
 }
 
 function defaultUnit(assetType: DebtAssetType): string {
@@ -103,21 +115,20 @@ function DebtFields({
     <>
       <label>
         Borç türü
-        <select
+        <WheelSelect
+          title="Borç türü"
           value={state.assetType}
-          onChange={(e) => {
-            const next = e.target.value as DebtAssetType
+          required
+          onChange={(v) => {
+            const next = v as DebtAssetType
             onChange('assetType', next)
             onChange('unit', defaultUnit(next))
           }}
-          required
-        >
-          {DEBT_ASSET_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {DEBT_ASSET_TYPE_LABELS[type]}
-            </option>
-          ))}
-        </select>
+          options={DEBT_ASSET_TYPES.map((type) => ({
+            value: type,
+            label: DEBT_ASSET_TYPE_LABELS[type],
+          }))}
+        />
       </label>
 
       {moneyLike && (
@@ -135,21 +146,24 @@ function DebtFields({
           </label>
           <label>
             Döviz türü
-            <select
+            <WheelSelect
+              title="Döviz türü"
               value={state.unit}
-              onChange={(e) => onChange('unit', e.target.value)}
               required
-            >
-              {DEBT_CURRENCY_OPTIONS.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-              {state.unit &&
+              onChange={(v) => onChange('unit', v)}
+              options={[
+                ...DEBT_CURRENCY_OPTIONS.map((code) => ({
+                  value: code,
+                  label: code,
+                })),
+                ...(state.unit &&
                 !(DEBT_CURRENCY_OPTIONS as readonly string[]).includes(
                   state.unit,
-                ) && <option value={state.unit}>{state.unit}</option>}
-            </select>
+                )
+                  ? [{ value: state.unit, label: state.unit }]
+                  : []),
+              ]}
+            />
           </label>
         </>
       )}
@@ -164,28 +178,34 @@ function DebtFields({
               step={1}
               value={state.amount || ''}
               onChange={(e) =>
-                onChange('amount', Math.max(0, Math.round(Number(e.target.value))))
+                onChange(
+                  'amount',
+                  Math.max(0, Math.round(Number(e.target.value))),
+                )
               }
               required
             />
           </label>
           <label>
             Altın türü
-            <select
+            <WheelSelect
+              title="Altın türü"
               value={state.unit}
-              onChange={(e) => onChange('unit', e.target.value)}
               required
-            >
-              {DEBT_GOLD_TYPE_OPTIONS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-              {state.unit &&
+              onChange={(v) => onChange('unit', v)}
+              options={[
+                ...DEBT_GOLD_TYPE_OPTIONS.map((kind) => ({
+                  value: kind,
+                  label: kind,
+                })),
+                ...(state.unit &&
                 !(DEBT_GOLD_TYPE_OPTIONS as readonly string[]).includes(
                   state.unit,
-                ) && <option value={state.unit}>{state.unit}</option>}
-            </select>
+                )
+                  ? [{ value: state.unit, label: state.unit }]
+                  : []),
+              ]}
+            />
           </label>
         </>
       )}
@@ -224,19 +244,19 @@ function DebtFields({
       </label>
       <label>
         {debtTakenAtLabel(direction)}
-        <input
-          type="date"
+        <WheelDateSelect
+          title="Tarih"
           value={state.takenAt}
-          onChange={(e) => onChange('takenAt', e.target.value)}
+          onChange={(v) => onChange('takenAt', v)}
           required
         />
       </label>
       <label>
         {debtPaidAtLabel(direction)}
-        <input
-          type="date"
+        <WheelDateSelect
+          title="Tarih"
           value={state.paidAt}
-          onChange={(e) => onChange('paidAt', e.target.value)}
+          onChange={(v) => onChange('paidAt', v)}
         />
       </label>
       <label className="span-2">
@@ -326,29 +346,73 @@ function DebtEntryForm({
   )
 }
 
-function personKey(item: DebtEvent): string {
+function personDisplay(item: DebtEvent): string {
   return item.counterparty?.trim() || 'Belirtilmedi'
 }
 
+/** Türkçe büyük/küçük harf duyarsız kişi anahtarı */
+function personKey(item: DebtEvent): string {
+  const display = personDisplay(item)
+  if (display === 'Belirtilmedi') return display
+  return display.toLocaleLowerCase('tr-TR')
+}
+
 function totalKey(item: DebtEvent): string {
-  return `${item.assetType}|${(item.unit ?? '').trim()}`
+  const unit = (item.unit ?? '').trim()
+  const unitKey =
+    item.assetType === 'gold'
+      ? unit.toLocaleLowerCase('tr-TR')
+      : unit.toLocaleUpperCase('tr-TR')
+  return `${item.assetType}|${unitKey}`
+}
+
+/** Kart rengi: altın / USD / EUR / TL */
+function debtToneClass(
+  assetType: DebtAssetType,
+  unit?: string | null,
+): string {
+  const parts = [`debt-type-${assetType}`]
+  if (assetType === 'gold') {
+    parts.push('debt-unit-gold')
+    return parts.join(' ')
+  }
+  if (assetType !== 'cash' && assetType !== 'currency') {
+    return parts.join(' ')
+  }
+  const code = (unit ?? '').trim().toLocaleUpperCase('tr-TR')
+  if (code === 'USD') parts.push('debt-unit-usd')
+  else if (code === 'EUR') parts.push('debt-unit-eur')
+  else if (code === 'TRY' || code === 'TL') parts.push('debt-unit-try')
+  return parts.join(' ')
 }
 
 function groupByPerson(items: DebtEvent[]): Array<{
   person: string
   items: DebtEvent[]
 }> {
-  const map = new Map<string, DebtEvent[]>()
+  const map = new Map<string, { person: string; items: DebtEvent[] }>()
   for (const item of items) {
     const key = personKey(item)
-    const list = map.get(key)
-    if (list) list.push(item)
-    else map.set(key, [item])
+    const display = personDisplay(item)
+    const group = map.get(key)
+    if (group) {
+      group.items.push(item)
+      // Görünen ad: daha “düzgün” yazımı tercih et (küçük harf olmayan)
+      if (
+        display !== 'Belirtilmedi' &&
+        group.person === group.person.toLocaleLowerCase('tr-TR') &&
+        display !== display.toLocaleLowerCase('tr-TR')
+      ) {
+        group.person = display
+      }
+    } else {
+      map.set(key, { person: display, items: [item] })
+    }
   }
-  return [...map.entries()]
-    .map(([person, groupItems]) => ({
-      person,
-      items: [...groupItems].sort((a, b) =>
+  return [...map.values()]
+    .map((group) => ({
+      person: group.person,
+      items: [...group.items].sort((a, b) =>
         b.takenAt.localeCompare(a.takenAt),
       ),
     }))
@@ -448,15 +512,21 @@ function DebtDirectionColumn({
     }
     setSaving(true)
     try {
-      await updateDebtEvent(farmId, editingId, {
-        assetType: parsed.data.assetType,
-        amount: parsed.data.amount,
-        unit: editForm.unit,
-        counterparty: editForm.counterparty,
-        takenAt: parsed.data.takenAt,
-        paidAt: editForm.paidAt,
-        notes: editForm.notes,
-      })
+      const current = items.find((i) => i.id === editingId)
+      await updateDebtEvent(
+        farmId,
+        editingId,
+        {
+          assetType: parsed.data.assetType,
+          amount: parsed.data.amount,
+          unit: editForm.unit,
+          counterparty: editForm.counterparty,
+          takenAt: parsed.data.takenAt,
+          paidAt: editForm.paidAt,
+          notes: editForm.notes,
+        },
+        current,
+      )
       setEditingId(null)
       onInfo('Borç kaydı güncellendi.')
     } catch (err) {
@@ -469,8 +539,8 @@ function DebtDirectionColumn({
   function renderItem(item: DebtEvent) {
     if (editingId === item.id) {
       return (
-        <li key={item.id} className="debt-item fertilize-edit-item">
-          <form className="form-grid" onSubmit={onSaveEdit}>
+        <li key={item.id} className="debt-item debt-item--editing">
+          <form className="form-grid debt-edit-form" onSubmit={onSaveEdit}>
             <DebtFields
               state={editForm}
               direction={direction}
@@ -478,12 +548,16 @@ function DebtDirectionColumn({
                 setEditForm((prev) => ({ ...prev, [key]: value }))
               }
             />
-            <div className="bulk-actions span-2">
-              <button className="btn primary" type="submit" disabled={saving}>
+            <div className="debt-item-actions span-2">
+              <button
+                className="debt-action debt-action--ok debt-action--label"
+                type="submit"
+                disabled={saving}
+              >
                 Kaydet
               </button>
               <button
-                className="btn ghost"
+                className="debt-action debt-action--label"
                 type="button"
                 onClick={() => setEditingId(null)}
               >
@@ -500,77 +574,208 @@ function DebtDirectionColumn({
         key={item.id}
         className={[
           'debt-item',
-          `debt-type-${item.assetType}`,
+          debtToneClass(item.assetType, item.unit),
           item.paidAt ? 'is-paid' : '',
         ]
           .filter(Boolean)
           .join(' ')}
         data-focus-id={focusDomId('debt', item.id)}
       >
-        <span className="debt-item-body">
-          <span className="debt-type-badge">
-            {DEBT_ASSET_TYPE_LABELS[item.assetType]}
-          </span>
-          <HighlightText
-            text={[
-              formatDebtAmount(item),
-              item.takenAt.slice(0, 10),
-              item.paidAt ? `ödendi ${item.paidAt.slice(0, 10)}` : 'açık',
-              item.notes,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-            query={focus?.highlight}
-            active={focus?.isTarget('debt', item.id)}
-          />
-        </span>
-        <div className="bulk-actions">
-          {!item.paidAt && (
-            <button
-              type="button"
-              className="btn ghost btn-compact"
-              disabled={saving}
-              onClick={() => {
-                void markDebtPaid(farmId, item.id).catch((err) =>
-                  onError(
-                    err instanceof Error ? err.message : 'İşaretlenemedi',
-                  ),
+        <div className="debt-item-main">
+          <div className="debt-item-body">
+            <div className="debt-item-topline">
+              <span className="debt-type-badge">
+                {DEBT_ASSET_TYPE_LABELS[item.assetType]}
+              </span>
+              <span
+                className={`debt-status-chip${item.paidAt ? ' is-paid' : ' is-open'}`}
+              >
+                {item.paidAt
+                  ? `Ödendi ${item.paidAt.slice(0, 10)}`
+                  : 'Açık'}
+              </span>
+            </div>
+            <span className="debt-item-text">
+              <HighlightText
+                text={[
+                  formatDebtAmount(item),
+                  item.takenAt.slice(0, 10),
+                  item.notes,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                query={focus?.highlight}
+                active={focus?.isTarget('debt', item.id)}
+              />
+            </span>
+            {(() => {
+              const summary = debtRateSummary(item)
+              if (!summary) return null
+              if (summary.kind === 'entry') {
+                return (
+                  <div className="debt-rate-diff">
+                    <span>
+                      Giriş kuru{' '}
+                      <strong>
+                        {summary.entryUnit.toLocaleString('tr-TR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        ₺
+                      </strong>
+                      /birim
+                    </span>
+                    <span>
+                      ≈{' '}
+                      <strong>
+                        {summary.entryTotal.toLocaleString('tr-TR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        ₺
+                      </strong>
+                    </span>
+                  </div>
                 )
-              }}
-            >
-              Ödendi
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn ghost btn-compact"
-            disabled={saving}
-            onClick={() => {
-              setEditingId(item.id)
-              setEditForm(formFromEvent(item))
-            }}
-          >
-            Düzenle
-          </button>
-          <button
-            type="button"
-            className="btn ghost btn-compact"
-            disabled={saving}
-            onClick={() => {
-              if (
-                !confirmDelete(
-                  'Bu borç kaydı silinsin mi? Bu işlem geri alınamaz.',
-                )
-              ) {
-                return
               }
-              void deleteDebtEvent(farmId, item.id).catch((err) =>
-                onError(err instanceof Error ? err.message : 'Silinemedi'),
+              const diff = summary.diff ?? 0
+              const sign = diff > 0 ? '+' : ''
+              return (
+                <div
+                  className={`debt-rate-diff debt-rate-diff--paid${
+                    diff > 0 ? ' is-gain' : diff < 0 ? ' is-loss' : ''
+                  }`}
+                >
+                  <span>
+                    Giriş{' '}
+                    <strong>
+                      {summary.entryTotal.toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      ₺
+                    </strong>
+                    <span className="debt-rate-diff-unit">
+                      (
+                      {summary.entryUnit.toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      ₺/birim)
+                    </span>
+                  </span>
+                  <span>
+                    Ödeme{' '}
+                    <strong>
+                      {(summary.paidTotal ?? 0).toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      ₺
+                    </strong>
+                    <span className="debt-rate-diff-unit">
+                      (
+                      {(summary.paidUnit ?? 0).toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      ₺/birim)
+                    </span>
+                  </span>
+                  <span className="debt-rate-diff-fark">
+                    Fark{' '}
+                    <strong>
+                      {sign}
+                      {diff.toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      ₺
+                    </strong>
+                  </span>
+                </div>
               )
-            }}
-          >
-            Sil
-          </button>
+            })()}
+          </div>
+          <div className="debt-item-actions" role="group" aria-label="İşlemler">
+            {!item.paidAt ? (
+              <button
+                type="button"
+                className="debt-action debt-action--ok debt-action--label"
+                disabled={saving}
+                onClick={() => {
+                  void markDebtPaid(farmId, item)
+                    .then(() =>
+                      onInfo(
+                        'Ödendi olarak işaretlendi; kur farkı kaydedildi.',
+                      ),
+                    )
+                    .catch((err) =>
+                      onError(
+                        err instanceof Error ? err.message : 'İşaretlenemedi',
+                      ),
+                    )
+                }}
+              >
+                Ödendi
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="debt-action debt-action--label"
+                disabled={saving}
+                onClick={() => {
+                  void markDebtUnpaid(farmId, item.id)
+                    .then(() => onInfo('Ödeme işareti geri alındı.'))
+                    .catch((err) =>
+                      onError(
+                        err instanceof Error
+                          ? err.message
+                          : 'Geri alınamadı',
+                      ),
+                    )
+                }}
+              >
+                Geri al
+              </button>
+            )}
+            <div className="debt-item-icon-actions">
+              <button
+                type="button"
+                className="debt-action debt-action--icon"
+                disabled={saving}
+                aria-label="Düzenle"
+                title="Düzenle"
+                onClick={() => {
+                  setEditingId(item.id)
+                  setEditForm(formFromEvent(item))
+                }}
+              >
+                <IconPencil />
+              </button>
+              <button
+                type="button"
+                className="debt-action debt-action--icon debt-action--danger"
+                disabled={saving}
+                aria-label="Sil"
+                title="Sil"
+                onClick={() => {
+                  if (
+                    !confirmDelete(
+                      'Bu borç kaydı silinsin mi? Bu işlem geri alınamaz.',
+                    )
+                  ) {
+                    return
+                  }
+                  void deleteDebtEvent(farmId, item.id).catch((err) =>
+                    onError(err instanceof Error ? err.message : 'Silinemedi'),
+                  )
+                }}
+              >
+                <IconTrash />
+              </button>
+            </div>
+          </div>
         </div>
       </li>
     )
@@ -585,18 +790,25 @@ function DebtDirectionColumn({
           : 'debts-list-payable'
       }
     >
-      <h3 className="debts-list-col-title">{title}</h3>
-      <p className="muted small debts-list-col-hint">
-        {direction === 'receivable' ? 'Kime göre' : 'Kimden göre'}
-      </p>
+      <header className="debts-list-col-head">
+        <h3 className="debts-list-col-title">{title}</h3>
+        <span className="debts-list-col-count">
+          {items.length} kayıt
+        </span>
+      </header>
 
       {items.length === 0 ? (
-        <p className="muted small">Henüz kayıt yok.</p>
+        <p className="muted small debts-list-empty">Henüz kayıt yok.</p>
       ) : (
         <div className="debt-person-stack">
           {groups.map((group) => (
             <div key={group.person} className="debt-person-block">
-              <h4 className="debt-person-name">{group.person}</h4>
+              <div className="debt-person-head">
+                <h4 className="debt-person-name">{group.person}</h4>
+                <span className="debt-person-count">
+                  {group.items.length}
+                </span>
+              </div>
               <ul className="event-list debt-person-items">
                 {group.items.map(renderItem)}
               </ul>
@@ -606,7 +818,10 @@ function DebtDirectionColumn({
       )}
 
       <div className="debt-totals">
-        <strong>Toplam {title}</strong>
+        <div className="debt-totals-head">
+          <strong>Toplam {title}</strong>
+          <span className="muted small">yalnızca açık</span>
+        </div>
         {totals.length === 0 ? (
           <p className="muted small">Açık borç yok.</p>
         ) : (
@@ -614,12 +829,12 @@ function DebtDirectionColumn({
             {totals.map((row) => (
               <li
                 key={`${row.assetType}-${row.unit}`}
-                className={`debt-total-row debt-type-${row.assetType}`}
+                className={`debt-total-row ${debtToneClass(row.assetType, row.unit)}`}
               >
                 <span className="debt-type-badge">
                   {DEBT_ASSET_TYPE_LABELS[row.assetType]}
                 </span>
-                <span>{row.label}</span>
+                <span className="debt-total-label">{row.label}</span>
               </li>
             ))}
           </ul>
@@ -636,14 +851,25 @@ export function FarmDebtsPanel({ farmId, userId }: FarmDebtsPanelProps) {
   const [rates, setRates] = useState<MarketRates | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
   const [ratesLoading, setRatesLoading] = useState(false)
+  const backfillDoneFor = useRef<string | null>(null)
 
   useEffect(() => {
+    backfillDoneFor.current = null
     return subscribeDebtEvents(
       farmId,
       setItems,
       (err) => setError(err.message),
     )
   }, [farmId])
+
+  useEffect(() => {
+    if (items.length === 0) return
+    if (backfillDoneFor.current === farmId) return
+    backfillDoneFor.current = farmId
+    void backfillDebtHistoricalRates(farmId, items).catch(() => {
+      /* sessiz: canlı kur paneli yine çalışır */
+    })
+  }, [farmId, items])
 
   useEffect(() => {
     let cancelled = false
@@ -693,6 +919,11 @@ export function FarmDebtsPanel({ farmId, userId }: FarmDebtsPanelProps) {
     receivableTry && payableTry
       ? Number((receivableTry.totalTry - payableTry.totalTry).toFixed(2))
       : null
+
+  const debtRateQuotes = useMemo(
+    () => (rates ? openDebtRateQuotes(items, rates) : []),
+    [items, rates],
+  )
 
   return (
     <>
@@ -804,9 +1035,37 @@ export function FarmDebtsPanel({ farmId, userId }: FarmDebtsPanelProps) {
                   : ''}
                 .
               </p>
+              {debtRateQuotes.length > 0 && (
+                <ul className="debt-rate-quotes">
+                  {debtRateQuotes.map((q) => (
+                    <li key={q.key}>
+                      <span className="debt-rate-quotes-label">{q.label}</span>
+                      <span className="debt-rate-quotes-prices">
+                        {q.buy != null ? (
+                          <>
+                            Alış <strong>{formatTry(q.buy)}</strong>
+                          </>
+                        ) : (
+                          <span className="muted">Alış —</span>
+                        )}
+                        <span className="debt-rate-quotes-sep" aria-hidden>
+                          ·
+                        </span>
+                        {q.sell != null ? (
+                          <>
+                            Satış <strong>{formatTry(q.sell)}</strong>
+                          </>
+                        ) : (
+                          <span className="muted">Satış —</span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <button
                 type="button"
-                className="btn ghost btn-compact"
+                className="debt-action"
                 disabled={ratesLoading}
                 onClick={() => {
                   setRatesLoading(true)

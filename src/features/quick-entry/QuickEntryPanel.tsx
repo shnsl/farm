@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
 import { IconClipboard } from '../../components/Icons'
+import { WheelSelect } from '../../components/WheelSelect'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import {
   createFertilizeEvent,
   createFertilizeSchema,
@@ -409,69 +411,68 @@ export function QuickEntryPanel({
           <form className="form-grid" onSubmit={onSubmit}>
             <label>
               Tarla
-              <select
+              <WheelSelect
+                title="Tarla"
                 value={fieldId}
-                onChange={(e) => setFieldId(e.target.value)}
+                onChange={setFieldId}
                 required
-              >
-                {fields.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
+                options={fields.map((f) => ({
+                  value: f.id,
+                  label: f.name,
+                }))}
+              />
             </label>
             <label>
               İşlem
-              <select
+              <WheelSelect
+                title="İşlem"
                 value={op}
-                onChange={(e) => setOp(e.target.value as QuickOp)}
-              >
-                {(Object.keys(OP_LABELS) as QuickOp[]).map((key) => (
-                  <option key={key} value={key}>
-                    {OP_LABELS[key]}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setOp(v as QuickOp)}
+                options={(Object.keys(OP_LABELS) as QuickOp[]).map((key) => ({
+                  value: key,
+                  label: OP_LABELS[key],
+                }))}
+              />
             </label>
             <label>
               Tarih
-              <input
-                type="date"
-                value={doneAt}
-                onChange={(e) => setDoneAt(e.target.value)}
-                required
-              />
+              <WheelDateSelect
+              title="Tarih"
+              value={doneAt}
+              onChange={setDoneAt}
+              required
+            />
             </label>
 
             {op === 'plow' && (
               <>
                 <label>
                   Yön
-                  <select
+                  <WheelSelect
+                    title="Yön"
                     value={direction}
-                    onChange={(e) =>
-                      setDirection(e.target.value as PlowDirection)
-                    }
-                  >
-                    <option value="enine">Enine</option>
-                    <option value="boyuna">Boyuna</option>
-                  </select>
+                    onChange={(v) => setDirection(v as PlowDirection)}
+                    options={[
+                      { value: 'enine', label: 'Enine' },
+                      { value: 'boyuna', label: 'Boyuna' },
+                    ]}
+                  />
                 </label>
                 <label>
                   Ekipman
-                  <select
+                  <WheelSelect
+                    title="Ekipman"
                     value={equipmentChoice}
-                    onChange={(e) => setEquipmentChoice(e.target.value)}
+                    onChange={setEquipmentChoice}
                     required
-                  >
-                    {PLOW_EQUIPMENT_OPTIONS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                    <option value={EQUIPMENT_OTHER}>Diğer</option>
-                  </select>
+                    options={[
+                      ...PLOW_EQUIPMENT_OPTIONS.map((item) => ({
+                        value: item,
+                        label: item,
+                      })),
+                      { value: EQUIPMENT_OTHER, label: 'Diğer' },
+                    ]}
+                  />
                 </label>
                 {equipmentChoice === EQUIPMENT_OTHER && (
                   <label>

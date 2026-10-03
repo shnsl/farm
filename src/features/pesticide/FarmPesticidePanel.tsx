@@ -6,7 +6,13 @@ import {
   type ReactNode,
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
-import { IconSpray, SectionTitle } from '../../components/Icons'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
+import {
+  IconPencil,
+  IconSpray,
+  IconTrash,
+  SectionTitle,
+} from '../../components/Icons'
 import { confirmDelete } from '../../lib/confirmDelete'
 import {
   focusDomId,
@@ -329,12 +335,12 @@ export function FarmPesticidePanel({
             </label>
             <label>
               Miat
-              <input
-                type="date"
-                value={editExpiresAt}
-                onChange={(e) => setEditExpiresAt(e.target.value)}
-                required
-              />
+              <WheelDateSelect
+              title="Tarih"
+              value={editExpiresAt}
+              onChange={setEditExpiresAt}
+              required
+            />
             </label>
             <label>
               Tane
@@ -421,19 +427,23 @@ export function FarmPesticidePanel({
             active={focus?.isTarget('pesticideStock', item.id)}
           />
         </span>
-        <div className="bulk-actions">
+        <div className="list-icon-actions">
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
+            aria-label="Düzenle"
+            title="Düzenle"
             onClick={() => startEditStock(item)}
           >
-            Düzenle
+            <IconPencil />
           </button>
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
+            aria-label="Sil"
+            title="Sil"
             onClick={() => {
               if (
                 !confirmDelete(
@@ -447,7 +457,7 @@ export function FarmPesticidePanel({
               )
             }}
           >
-            Sil
+            <IconTrash />
           </button>
         </div>
       </li>
@@ -461,12 +471,12 @@ export function FarmPesticidePanel({
           <form className="form-grid" onSubmit={onSaveExpenseEdit}>
             <label>
               Tarih
-              <input
-                type="date"
-                value={editExpenseAt}
-                onChange={(e) => setEditExpenseAt(e.target.value)}
-                required
-              />
+              <WheelDateSelect
+              title="Tarih"
+              value={editExpenseAt}
+              onChange={setEditExpenseAt}
+              required
+            />
             </label>
             <label>
               İlaç adı
@@ -533,19 +543,23 @@ export function FarmPesticidePanel({
             active={focus?.isTarget('pesticideExpense', item.id)}
           />
         </span>
-        <div className="bulk-actions">
+        <div className="list-icon-actions">
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
+            aria-label="Düzenle"
+            title="Düzenle"
             onClick={() => startEditExpense(item)}
           >
-            Düzenle
+            <IconPencil />
           </button>
           <button
             type="button"
-            className="btn ghost btn-compact"
+            className="btn ghost btn-icon"
             disabled={saving}
+            aria-label="Sil"
+            title="Sil"
             onClick={() => {
               if (
                 !confirmDelete(
@@ -559,7 +573,7 @@ export function FarmPesticidePanel({
               )
             }}
           >
-            Sil
+            <IconTrash />
           </button>
         </div>
       </li>
@@ -603,82 +617,14 @@ export function FarmPesticidePanel({
         </div>
       </div>
 
-      <CollapseSection title="Depo Stoğu" icon={<IconSpray />} tone="olive" sectionId="pesticide-stock">
-        <form className="form-grid" onSubmit={onAddStock}>
-          <label>
-            İlaç adı
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Örn. Bakır sülfat"
-              required
-            />
-          </label>
-          <label>
-            Miat
-            <input
-              type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Tane
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={quantityPieces}
-              onChange={(e) => setQuantityPieces(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label>
-            Mililitre (ml)
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={quantityMl}
-              onChange={(e) => setQuantityMl(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label>
-            Ağaç çeşidi
-            <input
-              value={treeSpecies}
-              onChange={(e) => setTreeSpecies(e.target.value)}
-              placeholder="Örn. Zeytin"
-              required
-            />
-          </label>
-          <label>
-            Kullanım dozu (lt su)
-            <input
-              type="number"
-              min={0.01}
-              step={0.01}
-              value={doseWaterLiters}
-              onChange={(e) => setDoseWaterLiters(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label className="span-2">
-            Not
-            <input
-              value={stockNotes}
-              onChange={(e) => setStockNotes(e.target.value)}
-              placeholder="Veri girmek için dokunun.."
-            />
-          </label>
-          <button className="btn primary" type="submit" disabled={saving}>
-            {saving ? 'Kaydediliyor…' : 'Stoğa ekle'}
-          </button>
-        </form>
-
-        <div>
+      <CollapseSection
+        title="Depo Stoğu"
+        icon={<IconSpray />}
+        tone="olive"
+        sectionId="pesticide-stock"
+        bodyClassName="stack"
+      >
+        <div className="panel-frame stack">
           <SectionTitle as="h3" icon={<IconSpray />} tone="olive">
             Eldeki İlaçlar
           </SectionTitle>
@@ -699,6 +645,89 @@ export function FarmPesticidePanel({
             </ul>
           )}
         </div>
+
+        <div className="panel-frame stack">
+          <SectionTitle as="h3" icon={<IconSpray />} tone="olive">
+            Stoğa ekle
+          </SectionTitle>
+          <form className="form-grid" onSubmit={onAddStock}>
+            <label>
+              İlaç adı
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Örn. Bakır sülfat"
+                required
+              />
+            </label>
+            <label>
+              Miat
+              <WheelDateSelect
+                title="Tarih"
+                value={expiresAt}
+                onChange={setExpiresAt}
+                required
+              />
+            </label>
+            <label>
+              Tane
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={quantityPieces}
+                onChange={(e) => setQuantityPieces(Number(e.target.value))}
+                required
+              />
+            </label>
+            <label>
+              Mililitre (ml)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={quantityMl}
+                onChange={(e) => setQuantityMl(Number(e.target.value))}
+                required
+              />
+            </label>
+            <label>
+              Ağaç çeşidi
+              <input
+                value={treeSpecies}
+                onChange={(e) => setTreeSpecies(e.target.value)}
+                placeholder="Örn. Zeytin"
+                required
+              />
+            </label>
+            <label>
+              Kullanım dozu (lt su)
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={doseWaterLiters}
+                onChange={(e) => setDoseWaterLiters(Number(e.target.value))}
+                required
+              />
+            </label>
+            <label className="span-2">
+              Not
+              <input
+                value={stockNotes}
+                onChange={(e) => setStockNotes(e.target.value)}
+                placeholder="Veri girmek için dokunun.."
+              />
+            </label>
+            <button
+              className="btn primary span-2"
+              type="submit"
+              disabled={saving}
+            >
+              {saving ? 'Kaydediliyor…' : 'Stoğa ekle'}
+            </button>
+          </form>
+        </div>
       </CollapseSection>
 
       <CollapseSection
@@ -706,14 +735,15 @@ export function FarmPesticidePanel({
         icon={<IconSpray />}
         tone="amber"
         sectionId="pesticide-expenses"
+        bodyClassName="stack"
       >
         <form className="form-grid" onSubmit={onAddExpense}>
           <label>
             Tarih
-            <input
-              type="date"
+            <WheelDateSelect
+              title="Tarih"
               value={expenseAt}
-              onChange={(e) => setExpenseAt(e.target.value)}
+              onChange={setExpenseAt}
               required
             />
           </label>
@@ -744,14 +774,18 @@ export function FarmPesticidePanel({
               placeholder="Veri girmek için dokunun.."
             />
           </label>
-          <button className="btn primary" type="submit" disabled={saving}>
+          <button
+            className="btn primary span-2"
+            type="submit"
+            disabled={saving}
+          >
             {saving ? 'Kaydediliyor…' : 'Masraf ekle'}
           </button>
         </form>
 
         <YearlyPesticideChart events={expenses} />
 
-        <div>
+        <div className="stack">
           <SectionTitle as="h3" icon={<IconSpray />} tone="amber">
             Masraf Kayıtları
           </SectionTitle>

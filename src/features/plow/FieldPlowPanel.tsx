@@ -14,6 +14,8 @@ import {
   IconList,
   IconPlow,
 } from '../../components/Icons'
+import { WheelSelect } from '../../components/WheelSelect'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import { focusDomId, HighlightText, useFocusNav } from '../../lib/focusNav'
 import {
   buildPlowStatPeriods,
@@ -465,37 +467,40 @@ export function FieldPlowPanel({
         <form className="form-grid" onSubmit={onAddPlow}>
           <label>
             Tarih
-            <input
-              type="date"
+            <WheelDateSelect
+              title="Tarih"
               value={plowDate}
-              onChange={(e) => setPlowDate(e.target.value)}
+              onChange={setPlowDate}
               required
             />
           </label>
           <label>
             Yön
-            <select
+            <WheelSelect
+              title="Yön"
               value={direction}
-              onChange={(e) => setDirection(e.target.value as PlowDirection)}
-            >
-              <option value="enine">Enine</option>
-              <option value="boyuna">Boyuna</option>
-            </select>
+              onChange={(v) => setDirection(v as PlowDirection)}
+              options={[
+                { value: 'enine', label: 'Enine' },
+                { value: 'boyuna', label: 'Boyuna' },
+              ]}
+            />
           </label>
           <label>
             Ekipman
-            <select
+            <WheelSelect
+              title="Ekipman"
               value={equipmentChoice}
-              onChange={(e) => setEquipmentChoice(e.target.value)}
+              onChange={setEquipmentChoice}
               required
-            >
-              {PLOW_EQUIPMENT_OPTIONS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-              <option value={EQUIPMENT_OTHER}>Diğer</option>
-            </select>
+              options={[
+                ...PLOW_EQUIPMENT_OPTIONS.map((item) => ({
+                  value: item,
+                  label: item,
+                })),
+                { value: EQUIPMENT_OTHER, label: 'Diğer' },
+              ]}
+            />
           </label>
           {equipmentChoice === EQUIPMENT_OTHER && (
             <label>
@@ -526,10 +531,10 @@ export function FieldPlowPanel({
         <form className="form-grid" onSubmit={onAddHarvest}>
           <label>
             Tarih
-            <input
-              type="date"
+            <WheelDateSelect
+              title="Tarih"
               value={harvestDate}
-              onChange={(e) => setHarvestDate(e.target.value)}
+              onChange={setHarvestDate}
               required
             />
           </label>
@@ -664,12 +669,12 @@ export function FieldPlowPanel({
                         >
                           <label>
                             Tarih
-                            <input
-                              type="date"
-                              value={editDate}
-                              onChange={(e) => setEditDate(e.target.value)}
-                              required
-                            />
+                            <WheelDateSelect
+              title="Tarih"
+              value={editDate}
+              onChange={setEditDate}
+              required
+            />
                           </label>
                           <label>
                             İşçi

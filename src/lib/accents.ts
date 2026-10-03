@@ -6,6 +6,7 @@ export type AccentId =
   | 'rose'
   | 'violet'
   | 'olive'
+  | 'black'
 
 export type ThemeMode = 'light' | 'dark'
 
@@ -331,6 +332,48 @@ export const APP_ACCENTS: AccentOption[] = [
       bgTop: '#1c2014',
       bgBottom: '#10140c',
       swatch: '#a8b86a',
+    },
+  },
+  {
+    id: 'black',
+    label: 'Siyah',
+    light: {
+      brand: '#1a1a1a',
+      brandStrong: '#000000',
+      filled: '#333333',
+      bg: '#f0f0f0',
+      bgAccent: '#e2e2e2',
+      surface: '#fafafa',
+      ink: '#111111',
+      muted: '#4a4a4a',
+      line: '#bdbdbd',
+      cellEmpty: '#ececec',
+      cellEmptyBorder: '#d0d0d0',
+      successBg: '#e8ebe8',
+      successBorder: '#b8c0b8',
+      glow: 'rgba(0, 0, 0, 0.08)',
+      bgTop: '#f6f6f6',
+      bgBottom: '#e8e8e8',
+      swatch: '#1a1a1a',
+    },
+    dark: {
+      brand: '#e6e6e6',
+      brandStrong: '#ffffff',
+      filled: '#c0c0c0',
+      bg: '#000000',
+      bgAccent: '#1c1c1c',
+      surface: '#141414',
+      ink: '#f5f5f5',
+      muted: '#bdbdbd',
+      line: '#3d3d3d',
+      cellEmpty: '#1a1a1a',
+      cellEmptyBorder: '#404040',
+      successBg: '#142018',
+      successBorder: '#3a5a42',
+      glow: 'rgba(255, 255, 255, 0.08)',
+      bgTop: '#000000',
+      bgBottom: '#000000',
+      swatch: '#111111',
     },
   },
 ]

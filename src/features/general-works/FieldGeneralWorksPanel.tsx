@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { CollapseSection } from '../../components/CollapseSection'
+import { WheelDateSelect } from '../../components/WheelDateSelect'
 import {
   IconNotebook,
   IconPencil,
@@ -208,12 +209,12 @@ export function FieldGeneralWorksPanel({
           <form className="form-grid" onSubmit={onSaveEdit}>
             <label>
               Tarih
-              <input
-                type="date"
-                value={editDoneAt}
-                onChange={(e) => setEditDoneAt(e.target.value)}
-                required
-              />
+              <WheelDateSelect
+              title="Tarih"
+              value={editDoneAt}
+              onChange={setEditDoneAt}
+              required
+            />
             </label>
             <label>
               İşlem
@@ -325,12 +326,12 @@ export function FieldGeneralWorksPanel({
       <form className="form-grid" onSubmit={onAdd}>
         <label>
           Tarih
-          <input
-            type="date"
-            value={doneAt}
-            onChange={(e) => setDoneAt(e.target.value)}
-            required
-          />
+          <WheelDateSelect
+              title="Tarih"
+              value={doneAt}
+              onChange={setDoneAt}
+              required
+            />
         </label>
         <label>
           İşlem

@@ -13,6 +13,12 @@ import {
 import { z } from 'zod'
 import { db } from '../../lib/firebase'
 import type { DebtAssetType, DebtDirection, DebtEvent } from '../../types'
+import {
+  debtNeedsMarketRate,
+  fetchMarketRatesAsOf,
+  todayIsoIstanbul,
+  unitTryRate,
+} from './marketRates'
 
 export const DEBT_DIRECTION_LABELS: Record<DebtDirection, string> = {
   receivable: 'Alacaklarım',
@@ -56,7 +62,7 @@ export const DEBT_GOLD_TYPE_OPTIONS = [
 ] as const
 
 export function debtCounterpartyLabel(direction: DebtDirection): string {
-  return direction === 'receivable' ? 'Kime' : 'Kimden'
+  return direction === 'receivable' ? 'Kimden' : 'Kime'
 }
 
 export function debtTakenAtLabel(direction: DebtDirection): string {
@@ -135,6 +141,11 @@ function mapDebt(id: string, data: Record<string, unknown>): DebtEvent {
       ? assetRaw
       : 'other'
 
+  const rateAtTaken =
+    data.rateAtTakenTry != null ? Number(data.rateAtTakenTry) : NaN
+  const rateAtPaid =
+    data.rateAtPaidTry != null ? Number(data.rateAtPaidTry) : NaN
+
   return {
     id,
     direction,
@@ -145,10 +156,84 @@ function mapDebt(id: string, data: Record<string, unknown>): DebtEvent {
     takenAt: String(data.takenAt ?? ''),
     dueAt: data.dueAt ? String(data.dueAt) : undefined,
     paidAt: data.paidAt ? String(data.paidAt) : undefined,
+    rateAtTakenTry: Number.isFinite(rateAtTaken) ? rateAtTaken : undefined,
+    rateAtPaidTry: Number.isFinite(rateAtPaid) ? rateAtPaid : undefined,
     notes: data.notes ? String(data.notes) : undefined,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAtIso ?? ''),
   }
+}
+
+async function lookupUnitRateTry(
+  assetType: DebtAssetType,
+  unit: string | undefined,
+  direction: DebtDirection,
+  asOfDate: string,
+): Promise<number | null> {
+  if (!debtNeedsMarketRate(assetType, unit)) return null
+  try {
+    const rates = await fetchMarketRatesAsOf(asOfDate.slice(0, 10))
+    return unitTryRate(rates, assetType, unit, direction)
+  } catch {
+    return null
+  }
+}
+
+function ratesDiffer(a: number | null | undefined, b: number | null): boolean {
+  if (b == null) return false
+  if (a == null || !Number.isFinite(a)) return true
+  return Math.abs(a - b) > 0.01
+}
+
+function fmtTryAmount(value: number): string {
+  return `${value.toLocaleString('tr-TR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ₺`
+}
+
+export type DebtRateSummary = {
+  kind: 'entry' | 'diff'
+  entryUnit: number
+  entryTotal: number
+  paidUnit?: number
+  paidTotal?: number
+  diff?: number
+}
+
+export function debtRateSummary(item: DebtEvent): DebtRateSummary | null {
+  if (
+    item.rateAtTakenTry == null ||
+    !debtNeedsMarketRate(item.assetType, item.unit)
+  ) {
+    return null
+  }
+  const qty =
+    item.assetType === 'gold' ? Math.round(item.amount) : item.amount
+  const entryUnit = item.rateAtTakenTry
+  const entryTotal = Number((qty * entryUnit).toFixed(2))
+  if (item.rateAtPaidTry == null) {
+    return { kind: 'entry', entryUnit, entryTotal }
+  }
+  const paidUnit = item.rateAtPaidTry
+  const paidTotal = Number((qty * paidUnit).toFixed(2))
+  const diff = Number((paidTotal - entryTotal).toFixed(2))
+  return { kind: 'diff', entryUnit, entryTotal, paidUnit, paidTotal, diff }
+}
+
+export function formatDebtRateDiff(item: DebtEvent): string | null {
+  const s = debtRateSummary(item)
+  if (!s || s.kind !== 'diff' || s.paidTotal == null || s.diff == null) {
+    return null
+  }
+  const sign = s.diff > 0 ? '+' : ''
+  return `Giriş ${fmtTryAmount(s.entryTotal)} · Ödeme ${fmtTryAmount(s.paidTotal)} · Fark ${sign}${fmtTryAmount(s.diff)}`
+}
+
+export function formatDebtEntryRate(item: DebtEvent): string | null {
+  const s = debtRateSummary(item)
+  if (!s) return null
+  return `Giriş kuru ${fmtTryAmount(s.entryUnit)}/birim · ≈ ${fmtTryAmount(s.entryTotal)}`
 }
 
 export function formatDebtAmount(
@@ -192,6 +277,27 @@ export async function createDebtEvent(
     parsed.assetType === 'gold'
       ? Math.round(parsed.amount)
       : Number(parsed.amount.toFixed(2))
+  const paidAt = emptyToUndefined(parsed.paidAt) || null
+
+  let rateAtTakenTry: number | null = null
+  let rateAtPaidTry: number | null = null
+  if (debtNeedsMarketRate(parsed.assetType, parsed.unit)) {
+    rateAtTakenTry = await lookupUnitRateTry(
+      parsed.assetType,
+      parsed.unit,
+      parsed.direction,
+      parsed.takenAt,
+    )
+    if (paidAt) {
+      rateAtPaidTry = await lookupUnitRateTry(
+        parsed.assetType,
+        parsed.unit,
+        parsed.direction,
+        paidAt,
+      )
+    }
+  }
+
   const ref = await addDoc(collection(db, 'farms', farmId, 'debtEvents'), {
     direction: parsed.direction,
     assetType: parsed.assetType,
@@ -200,7 +306,9 @@ export async function createDebtEvent(
     counterparty: emptyToUndefined(parsed.counterparty) || null,
     takenAt: parsed.takenAt,
     dueAt: null,
-    paidAt: emptyToUndefined(parsed.paidAt) || null,
+    paidAt,
+    rateAtTakenTry,
+    rateAtPaidTry,
     notes: emptyToUndefined(parsed.notes) || null,
     createdBy,
     createdAt: serverTimestamp(),
@@ -213,6 +321,17 @@ export async function updateDebtEvent(
   farmId: string,
   eventId: string,
   input: UpdateDebtInput,
+  /** Kur hesabı için mevcut kayıt */
+  current?: Pick<
+    DebtEvent,
+    | 'assetType'
+    | 'unit'
+    | 'direction'
+    | 'takenAt'
+    | 'paidAt'
+    | 'rateAtTakenTry'
+    | 'rateAtPaidTry'
+  >,
 ): Promise<void> {
   const parsed = updateDebtSchema.parse(input)
   const patch: Record<string, unknown> = {
@@ -222,7 +341,7 @@ export async function updateDebtEvent(
   }
   if (parsed.assetType !== undefined) patch.assetType = parsed.assetType
   if (parsed.amount !== undefined) {
-    const assetType = parsed.assetType
+    const assetType = parsed.assetType ?? current?.assetType
     patch.amount =
       assetType === 'gold'
         ? Math.round(parsed.amount)
@@ -241,15 +360,136 @@ export async function updateDebtEvent(
   if (parsed.notes !== undefined) {
     patch.notes = emptyToUndefined(parsed.notes) || null
   }
+
+  const assetType = parsed.assetType ?? current?.assetType
+  const unit = parsed.unit !== undefined ? parsed.unit : current?.unit
+  const direction = current?.direction
+  const takenAt = parsed.takenAt ?? current?.takenAt
+  const nextPaid =
+    parsed.paidAt !== undefined
+      ? emptyToUndefined(parsed.paidAt) || null
+      : current?.paidAt ?? null
+
+  const entryFieldsChanged =
+    parsed.takenAt !== undefined ||
+    parsed.assetType !== undefined ||
+    parsed.unit !== undefined
+
+  if (
+    assetType &&
+    direction &&
+    takenAt &&
+    debtNeedsMarketRate(assetType, unit)
+  ) {
+    if (entryFieldsChanged || current?.rateAtTakenTry == null) {
+      const entryRate = await lookupUnitRateTry(
+        assetType,
+        unit,
+        direction,
+        takenAt,
+      )
+      if (entryRate != null) patch.rateAtTakenTry = entryRate
+    }
+
+    if (!nextPaid) {
+      if (parsed.paidAt !== undefined) patch.rateAtPaidTry = null
+    } else if (
+      parsed.paidAt !== undefined ||
+      entryFieldsChanged ||
+      current?.rateAtPaidTry == null
+    ) {
+      const paidRate = await lookupUnitRateTry(
+        assetType,
+        unit,
+        direction,
+        nextPaid,
+      )
+      if (paidRate != null) patch.rateAtPaidTry = paidRate
+    }
+  } else if (parsed.paidAt !== undefined && !nextPaid) {
+    patch.rateAtPaidTry = null
+  }
+
   await updateDoc(doc(db, 'farms', farmId, 'debtEvents', eventId), patch)
 }
 
 export async function markDebtPaid(
   farmId: string,
-  eventId: string,
-  paidAt = new Date().toISOString().slice(0, 10),
+  item: Pick<
+    DebtEvent,
+    'id' | 'assetType' | 'unit' | 'direction' | 'paidAt' | 'rateAtTakenTry'
+  >,
+  paidAt = todayIsoIstanbul(),
 ): Promise<void> {
-  await updateDebtEvent(farmId, eventId, { paidAt })
+  const patch: Record<string, unknown> = {
+    paidAt,
+    updatedAt: serverTimestamp(),
+    updatedAtIso: new Date().toISOString(),
+  }
+
+  if (debtNeedsMarketRate(item.assetType, item.unit)) {
+    const paidRate = await lookupUnitRateTry(
+      item.assetType,
+      item.unit,
+      item.direction,
+      paidAt,
+    )
+    if (paidRate != null) patch.rateAtPaidTry = paidRate
+  }
+
+  await updateDoc(doc(db, 'farms', farmId, 'debtEvents', item.id), patch)
+}
+
+/**
+ * Eski kayıtlardaki “bugünün kuru”nu takenAt / paidAt tarihsel kuruyla düzeltir.
+ */
+export async function backfillDebtHistoricalRates(
+  farmId: string,
+  items: DebtEvent[],
+): Promise<number> {
+  let updated = 0
+  for (const item of items) {
+    if (!debtNeedsMarketRate(item.assetType, item.unit)) continue
+    if (!item.takenAt) continue
+
+    const patch: Record<string, unknown> = {}
+    const entryRate = await lookupUnitRateTry(
+      item.assetType,
+      item.unit,
+      item.direction,
+      item.takenAt,
+    )
+    if (ratesDiffer(item.rateAtTakenTry, entryRate)) {
+      patch.rateAtTakenTry = entryRate
+    }
+
+    if (item.paidAt) {
+      const paidRate = await lookupUnitRateTry(
+        item.assetType,
+        item.unit,
+        item.direction,
+        item.paidAt,
+      )
+      if (ratesDiffer(item.rateAtPaidTry, paidRate)) {
+        patch.rateAtPaidTry = paidRate
+      }
+    }
+
+    if (Object.keys(patch).length === 0) continue
+    patch.updatedAt = serverTimestamp()
+    patch.updatedAtIso = new Date().toISOString()
+    await updateDoc(doc(db, 'farms', farmId, 'debtEvents', item.id), patch)
+    updated += 1
+  }
+  return updated
+}
+
+/** Yanlışlıkla “Ödendi” işaretini geri alır */
+export async function markDebtUnpaid(
+  farmId: string,
+  eventId: string,
+): Promise<void> {
+  await updateDebtEvent(farmId, eventId, { paidAt: '' })
 }
 
 export async function deleteDebtEvent(
