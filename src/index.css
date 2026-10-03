@@ -2799,8 +2799,8 @@ html[data-theme='dark'] .debt-type-other .debt-type-badge {
 }
 
 .wheel-sheet {
-  /* iOS picker: alt sheet, 5 satır tambur (~216px), ekrana göre ölçek */
-  --wheel-item-h: clamp(36px, 4.8vh, 40px);
+  /* Tam piksel satır yüksekliği — kesirli vh snap kaymasını önler */
+  --wheel-item-h: 40px;
   --wheel-rows: 5;
   --wheel-header-h: 52px;
   box-sizing: border-box;

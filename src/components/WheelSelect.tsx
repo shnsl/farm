@@ -41,6 +41,43 @@ function readItemH(root: HTMLElement) {
   return h > 0 ? h : DEFAULT_ITEM_H
 }
 
+/** Görsel satırı viewport ortasına getiren scrollTop (transform’dan bağımsız) */
+function scrollTopForVisual(
+  scroller: HTMLElement,
+  visual: number,
+  fallbackStep: number,
+) {
+  const items = scroller.querySelectorAll<HTMLElement>('.wheel-item')
+  const target = items[visual]
+  if (target) {
+    return Math.round(
+      target.offsetTop - (scroller.clientHeight - target.offsetHeight) / 2,
+    )
+  }
+  return Math.round(visual * fallbackStep)
+}
+
+/** Viewport ortasına en yakın satır indeksi */
+function nearestVisual(scroller: HTMLElement, fallbackStep: number, maxVis: number) {
+  const items = scroller.querySelectorAll<HTMLElement>('.wheel-item')
+  if (items.length === 0) {
+    return clamp(Math.round(scroller.scrollTop / fallbackStep), 0, maxVis)
+  }
+  const viewCenter = scroller.scrollTop + scroller.clientHeight / 2
+  let best = 0
+  let bestDist = Infinity
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i]!
+    const center = item.offsetTop + item.offsetHeight / 2
+    const d = Math.abs(center - viewCenter)
+    if (d < bestDist) {
+      bestDist = d
+      best = i
+    }
+  }
+  return clamp(best, 0, maxVis)
+}
+
 export function WheelColumn({
   options,
   value,
@@ -97,16 +134,15 @@ export function WheelColumn({
       const el = scrollerRef.current
       if (!el) return
       const step = itemHRef.current || DEFAULT_ITEM_H
-      const top = visual * step
+      const top = scrollTopForVisual(el, visual, step)
       suppressScrollRef.current = true
       window.clearTimeout(suppressTimerRef.current)
       if (behavior === 'auto') el.scrollTop = top
       else el.scrollTo({ top, behavior })
       suppressTimerRef.current = window.setTimeout(
         () => {
-          if (Math.abs(el.scrollTop - top) > 1) {
-            el.scrollTop = top
-          }
+          const again = scrollTopForVisual(el, visual, step)
+          if (Math.abs(el.scrollTop - again) > 0.5) el.scrollTop = again
           suppressScrollRef.current = false
         },
         behavior === 'auto' ? 60 : 180,
@@ -137,20 +173,8 @@ export function WheelColumn({
       const logical = mod(indexRef.current, n)
       const target = expectedVisual(logical)
       const step = itemHRef.current || DEFAULT_ITEM_H
-      const visual = Math.round(el.scrollTop / step)
-      // Zaten doğru değerde ve orta banttaysa dokunma
-      if (loopingRef.current) {
-        const copy = Math.floor(visual / n)
-        if (
-          mod(visual, n) === logical &&
-          copy > 0 &&
-          copy < LOOP_COPIES - 1 &&
-          Math.abs(el.scrollTop - visual * step) < 2
-        ) {
-          setPaintIndex(logical)
-          return
-        }
-      } else if (visual === logical && Math.abs(el.scrollTop - target * step) < 2) {
+      const ideal = scrollTopForVisual(el, target, step)
+      if (Math.abs(el.scrollTop - ideal) < 1.5) {
         setPaintIndex(logical)
         return
       }
@@ -227,28 +251,21 @@ export function WheelColumn({
 
     function visualFromScroll() {
       const step = itemHRef.current || DEFAULT_ITEM_H
-      return clamp(Math.round(el!.scrollTop / step), 0, maxVisual())
+      return nearestVisual(el!, step, maxVisual())
     }
 
-    /** Bırakış hızına göre hedef satır */
+    /** Bırakış: en yakın satır + hafif hız ofseti (tam satır adımı) */
     function targetVisualFromVelocity(velPxPerMs: number) {
       const step = itemHRef.current || DEFAULT_ITEM_H
-      const raw = el!.scrollTop / step
+      let visual = nearestVisual(el!, step, maxVisual())
       const abs = Math.abs(velPxPerMs)
-      // Fırlatma mesafesi: hız * sönüm süresi
-      let coastItems = 0
-      if (abs > 0.15) {
-        coastItems = (velPxPerMs * (abs > 1.2 ? 220 : abs > 0.5 ? 160 : 100)) / step
+      if (abs > 0.35) {
+        const extra = Math.round(
+          (velPxPerMs * (abs > 1 ? 140 : 90)) / step,
+        )
+        visual = clamp(visual + extra, 0, maxVisual())
       }
-      const projected = raw + coastItems
-      if (abs > 0.2) {
-        const biased =
-          velPxPerMs > 0
-            ? Math.round(projected + 0.2)
-            : Math.round(projected - 0.2)
-        return clamp(biased, 0, maxVisual())
-      }
-      return clamp(Math.round(raw), 0, maxVisual())
+      return visual
     }
 
     function logicalFromVisual(visual: number) {
@@ -275,34 +292,54 @@ export function WheelColumn({
       })
     }
 
-    /** Momentum’u öldürüp satıra kilitle; birkaç kare düzelt */
+    /** Momentum’u öldürüp satırı ortala; birkaç kare geometrik düzelt */
     function snapHard(visual: number) {
+      const root = rootRef.current
+      if (root) {
+        const measured = readItemH(root)
+        if (measured > 0) itemHRef.current = measured
+      }
       const step = itemHRef.current || DEFAULT_ITEM_H
-      const top = visual * step
       suppressScrollRef.current = true
       window.clearTimeout(suppressTimerRef.current)
       window.cancelAnimationFrame(correctRaf)
 
       el!.style.overflowY = 'hidden'
-      el!.scrollTop = top
+      const apply = () => {
+        el!.scrollTop = scrollTopForVisual(el!, visual, step)
+      }
+      apply()
 
       let frames = 0
-      const maxFrames = 12
+      const maxFrames = 16
       function correct() {
-        el!.scrollTop = top
+        apply()
         frames += 1
         if (frames < maxFrames) {
           correctRaf = window.requestAnimationFrame(correct)
           return
         }
-        el!.style.overflowY = ''
-        // Son güvenlik: hâlâ ofset varsa bir kez daha
-        if (Math.abs(el!.scrollTop - top) > 0.5) el!.scrollTop = top
+        apply()
+        // overflow kapalı kalsın — ara değere kaymayı engeller
         suppressTimerRef.current = window.setTimeout(() => {
-          if (Math.abs(el!.scrollTop - top) > 0.5) el!.scrollTop = top
+          apply()
+          el!.style.overflowY = ''
+          // Son kontrol: hâlâ ofset varsa tekrar kilitle
+          const ideal = scrollTopForVisual(el!, visual, step)
+          if (Math.abs(el!.scrollTop - ideal) > 0.5) {
+            el!.style.overflowY = 'hidden'
+            el!.scrollTop = ideal
+            window.setTimeout(() => {
+              el!.scrollTop = ideal
+              el!.style.overflowY = ''
+              suppressScrollRef.current = false
+              interactingRef.current = false
+            }, 40)
+            return
+          }
           suppressScrollRef.current = false
           interactingRef.current = false
-        }, 80)
+        }, 100)
       }
       correctRaf = window.requestAnimationFrame(correct)
     }
@@ -325,9 +362,10 @@ export function WheelColumn({
       if (n <= 0) return
       const visual = resolveVisual(targetVisualFromVelocity(vel))
       const logical = logicalFromVisual(visual)
-      commitLogical(logical)
       releaseVelocity = 0
+      // Önce hizala, sonra seçimi yaz — ara karede yanlış paint olmasın
       snapHard(visual)
+      commitLogical(logical)
     }
 
     function cancelIdleWatch() {
@@ -408,8 +446,9 @@ export function WheelColumn({
       lastTouchY = y
       lastTouchT = now
 
-      const maxTop = maxVisual() * (itemHRef.current || DEFAULT_ITEM_H)
-      el!.scrollTop = clamp(dragStartScroll + (dragStartY - y), 0, maxTop)
+      const step = itemHRef.current || DEFAULT_ITEM_H
+      const maxTop = scrollTopForVisual(el!, maxVisual(), step)
+      el!.scrollTop = clamp(dragStartScroll + (dragStartY - y), 0, Math.max(0, maxTop))
       paintFromScroll()
     }
 
