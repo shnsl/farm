@@ -17,7 +17,7 @@ export type WheelOption = {
 
 const DEFAULT_ITEM_H = 40
 /** Sonsuz döngü için seçenek listesi kopya sayısı (ortadaki bantta kalınır) */
-const LOOP_COPIES = 5
+const LOOP_COPIES = 3
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
@@ -113,10 +113,20 @@ export function WheelColumn({
   optionsRef.current = options
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
-  /** Görsel vurgu: kaydırırken parent’a yazmadan güncellenir */
+  /** Mantıksal seçim (0..n-1) */
   const [paintIndex, setPaintIndex] = useState(index)
   const paintIndexRef = useRef(paintIndex)
   paintIndexRef.current = paintIndex
+  /**
+   * Gerçek kaydırılan satır indeksi (kopya dahil).
+   * midBase+logical kullanılırsa 2./3. listede aktif stil yanlış satıra biner
+   * ve ara değerde kalmış gibi görünür.
+   */
+  const [paintVisual, setPaintVisual] = useState(() =>
+    looping ? midBase + index : index,
+  )
+  const paintVisualRef = useRef(paintVisual)
+  paintVisualRef.current = paintVisual
 
   const renderOptions = useMemo(() => {
     if (!looping) return options.map((opt, i) => ({ opt, visual: i }))
@@ -174,11 +184,9 @@ export function WheelColumn({
       const target = expectedVisual(logical)
       const step = itemHRef.current || DEFAULT_ITEM_H
       const ideal = scrollTopForVisual(el, target, step)
-      if (Math.abs(el.scrollTop - ideal) < 1.5) {
-        setPaintIndex(logical)
-        return
-      }
       setPaintIndex(logical)
+      setPaintVisual(target)
+      if (Math.abs(el.scrollTop - ideal) < 1.5) return
       scrollToVisual(target, 'auto')
     },
     [expectedVisual, scrollToVisual],
@@ -208,8 +216,9 @@ export function WheelColumn({
   // Dışarıdan value / seçenek değişince hizala (kullanıcı kaydırmıyorsa)
   useLayoutEffect(() => {
     setPaintIndex(index)
+    setPaintVisual(looping ? midBase + index : index)
     syncScrollToValue()
-  }, [index, options.length, pad, itemH, looping, syncScrollToValue])
+  }, [index, options.length, pad, itemH, looping, midBase, syncScrollToValue])
 
   // Açılış animasyonu sonrası bir kez sabitle
   useEffect(() => {
@@ -287,8 +296,10 @@ export function WheelColumn({
       window.cancelAnimationFrame(frame)
       frame = window.requestAnimationFrame(() => {
         if (suppressScrollRef.current && !dragging) return
-        const logical = logicalFromVisual(visualFromScroll())
+        const visual = visualFromScroll()
+        const logical = logicalFromVisual(visual)
         if (logical !== paintIndexRef.current) setPaintIndex(logical)
+        if (visual !== paintVisualRef.current) setPaintVisual(visual)
       })
     }
 
@@ -344,26 +355,18 @@ export function WheelColumn({
       correctRaf = window.requestAnimationFrame(correct)
     }
 
-    function resolveVisual(visual: number) {
-      const n = optionsRef.current.length
-      if (n <= 0) return 0
-      if (!loopingRef.current) return visual
-      const logical = logicalFromVisual(visual)
-      const copy = Math.floor(visual / n)
-      if (copy <= 0 || copy >= LOOP_COPIES - 1) {
-        return midBaseRef.current + logical
-      }
-      return visual
-    }
-
     function settle(vel = releaseVelocity) {
       if (touchActiveRef.current) return
       const n = optionsRef.current.length
       if (n <= 0) return
-      const visual = resolveVisual(targetVisualFromVelocity(vel))
-      const logical = logicalFromVisual(visual)
+      // Önce hangi satırda olduğumuzu bul, sonra sonsuz döngü için orta kopyaya kilitle
+      const approx = targetVisualFromVelocity(vel)
+      const logical = logicalFromVisual(approx)
+      const visual = loopingRef.current
+        ? midBaseRef.current + logical
+        : approx
       releaseVelocity = 0
-      // Önce hizala, sonra seçimi yaz — ara karede yanlış paint olmasın
+      setPaintVisual(visual)
       snapHard(visual)
       commitLogical(logical)
     }
@@ -487,7 +490,9 @@ export function WheelColumn({
         ? mod(indexRef.current + dir, n)
         : clamp(indexRef.current + dir, 0, n - 1)
       commitLogical(next)
-      scrollToVisual(expectedVisual(next), 'smooth')
+      const target = expectedVisual(next)
+      setPaintVisual(target)
+      scrollToVisual(target, 'smooth')
     }
 
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -513,8 +518,6 @@ export function WheelColumn({
     }
   }, [expectedVisual, scrollToVisual])
 
-  const visualActive = looping ? midBase + paintIndex : paintIndex
-
   return (
     <div ref={rootRef} className="wheel-column">
       <div className="wheel-column-mask" aria-hidden />
@@ -526,11 +529,11 @@ export function WheelColumn({
       >
         <div style={{ height: pad * itemH }} aria-hidden />
         {renderOptions.map(({ opt, visual }) => {
-          const dist = Math.abs(visual - visualActive)
+          const dist = Math.abs(visual - paintVisual)
           const scale = clamp(1 - dist * 0.12, 0.72, 1)
           const opacity = clamp(1 - dist * 0.28, 0.22, 1)
           const rotate = clamp(dist * 18, 0, 54)
-          const active = visual === visualActive
+          const active = visual === paintVisual
           return (
             <div
               key={`${opt.value}-${visual}`}
@@ -538,7 +541,7 @@ export function WheelColumn({
               aria-selected={active}
               className={`wheel-item${active ? ' is-active' : ''}`}
               style={{
-                transform: `translateZ(0) scale(${scale}) rotateX(${visual < visualActive ? rotate : -rotate}deg)`,
+                transform: `translateZ(0) scale(${scale}) rotateX(${visual < paintVisual ? rotate : -rotate}deg)`,
                 opacity,
               }}
               onClick={() => {
@@ -546,10 +549,12 @@ export function WheelColumn({
                 const logical = looping
                   ? mod(visual, options.length)
                   : visual
+                const target = expectedVisual(logical)
                 onChange(opt.value)
                 indexRef.current = logical
                 setPaintIndex(logical)
-                scrollToVisual(expectedVisual(logical), 'smooth')
+                setPaintVisual(target)
+                scrollToVisual(target, 'smooth')
               }}
             >
               {opt.label}
