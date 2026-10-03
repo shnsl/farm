@@ -209,8 +209,6 @@ export function WheelColumn({
     let wheelUnlockTimer = 0
     /** px/ms — scrollTop artış yönü pozitif */
     let releaseVelocity = 0
-    let sampleScroll = el.scrollTop
-    let sampleTime = 0
     let liveVelocity = 0
     /** Dokunmayı elle yönet — native momentum arada bırakmasın */
     let dragging = false
