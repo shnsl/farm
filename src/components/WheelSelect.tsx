@@ -58,6 +58,8 @@ export function WheelColumn({
   const itemHRef = useRef(DEFAULT_ITEM_H)
   const suppressScrollRef = useRef(false)
   const suppressTimerRef = useRef(0)
+  const touchActiveRef = useRef(false)
+  const interactingRef = useRef(false)
   const [pad, setPad] = useState(2)
   const [itemH, setItemH] = useState(DEFAULT_ITEM_H)
   const looping = loop && options.length > 1
@@ -74,6 +76,10 @@ export function WheelColumn({
   optionsRef.current = options
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  /** Görsel vurgu: kaydırırken parent’a yazmadan güncellenir */
+  const [paintIndex, setPaintIndex] = useState(index)
+  const paintIndexRef = useRef(paintIndex)
+  paintIndexRef.current = paintIndex
 
   const renderOptions = useMemo(() => {
     if (!looping) return options.map((opt, i) => ({ opt, visual: i }))
@@ -98,43 +104,61 @@ export function WheelColumn({
       else el.scrollTo({ top, behavior })
       suppressTimerRef.current = window.setTimeout(
         () => {
-          if (behavior === 'auto' && Math.abs(el.scrollTop - top) > 1) {
+          if (Math.abs(el.scrollTop - top) > 1) {
             el.scrollTop = top
           }
           suppressScrollRef.current = false
         },
-        behavior === 'auto' ? 80 : 160,
+        behavior === 'auto' ? 60 : 180,
       )
     },
     [],
   )
 
-  const scrollToLogical = useCallback(
-    (logical: number, behavior: ScrollBehavior = 'smooth') => {
-      const n = optionsRef.current.length
-      if (n <= 0) return
-      const i = mod(logical, n)
-      const visual = loopingRef.current ? midBaseRef.current + i : i
-      scrollToVisual(visual, behavior)
-    },
-    [scrollToVisual],
-  )
-
-  const syncScrollToValue = useCallback(() => {
-    const root = rootRef.current
-    const el = scrollerRef.current
+  const expectedVisual = useCallback((logical: number) => {
     const n = optionsRef.current.length
-    if (!el || n <= 0) return
-    if (root) {
-      const measured = readItemH(root)
-      if (measured > 0) itemHRef.current = measured
-    }
-    const expected = loopingRef.current
-      ? midBaseRef.current + mod(indexRef.current, n)
-      : clamp(indexRef.current, 0, n - 1)
-    // Her zaman hedef satıra kilitle (açılışta scrollTop=0 iken soluk/kesik görünmeyi önler)
-    scrollToVisual(expected, 'auto')
-  }, [scrollToVisual])
+    if (n <= 0) return 0
+    const i = mod(logical, n)
+    return loopingRef.current ? midBaseRef.current + i : i
+  }, [])
+
+  /** Programatik hizalama — kullanıcı dokunurken çağrılmaz */
+  const syncScrollToValue = useCallback(
+    (force = false) => {
+      if (!force && (touchActiveRef.current || interactingRef.current)) return
+      const root = rootRef.current
+      const el = scrollerRef.current
+      const n = optionsRef.current.length
+      if (!el || n <= 0) return
+      if (root) {
+        const measured = readItemH(root)
+        if (measured > 0) itemHRef.current = measured
+      }
+      const logical = mod(indexRef.current, n)
+      const target = expectedVisual(logical)
+      const step = itemHRef.current || DEFAULT_ITEM_H
+      const visual = Math.round(el.scrollTop / step)
+      // Zaten doğru değerde ve orta banttaysa dokunma
+      if (loopingRef.current) {
+        const copy = Math.floor(visual / n)
+        if (
+          mod(visual, n) === logical &&
+          copy > 0 &&
+          copy < LOOP_COPIES - 1 &&
+          Math.abs(el.scrollTop - visual * step) < 2
+        ) {
+          setPaintIndex(logical)
+          return
+        }
+      } else if (visual === logical && Math.abs(el.scrollTop - target * step) < 2) {
+        setPaintIndex(logical)
+        return
+      }
+      setPaintIndex(logical)
+      scrollToVisual(target, 'auto')
+    },
+    [expectedVisual, scrollToVisual],
+  )
 
   useEffect(() => {
     const root = rootRef.current
@@ -147,30 +171,31 @@ export function WheelColumn({
       const visible = Math.max(3, Math.floor(h / nextItemH))
       const odd = visible % 2 === 0 ? visible - 1 : visible
       setPad(Math.max(1, Math.floor(odd / 2)))
-      // Ölçüm sonrası seçili satırı ortala (açılışta kesik görünmeyi önler)
-      syncScrollToValue()
     }
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(() => {
+      measure()
+      syncScrollToValue(true)
+    })
     ro.observe(root)
     return () => ro.disconnect()
   }, [syncScrollToValue])
 
-  // Boyama öncesi hizala; sheet animasyonu sonrası bir kez daha sabitle
+  // Dışarıdan value / seçenek değişince hizala (kullanıcı kaydırmıyorsa)
   useLayoutEffect(() => {
+    setPaintIndex(index)
     syncScrollToValue()
   }, [index, options.length, pad, itemH, looping, syncScrollToValue])
 
+  // Açılış animasyonu sonrası bir kez sabitle
   useEffect(() => {
-    const t1 = window.setTimeout(syncScrollToValue, 40)
-    const t2 = window.setTimeout(syncScrollToValue, 180)
-    const t3 = window.setTimeout(syncScrollToValue, 320)
+    const t1 = window.setTimeout(() => syncScrollToValue(true), 50)
+    const t2 = window.setTimeout(() => syncScrollToValue(true), 280)
     return () => {
       window.clearTimeout(t1)
       window.clearTimeout(t2)
-      window.clearTimeout(t3)
     }
-  }, [index, options.length, pad, itemH, looping, syncScrollToValue])
+  }, [options.length, looping, syncScrollToValue])
 
   useEffect(() => {
     const el = scrollerRef.current
@@ -196,50 +221,68 @@ export function WheelColumn({
       return mod(visual, n)
     }
 
-    function emitLogical(logical: number) {
+    function commitLogical(logical: number) {
       const val = optionsRef.current[logical]?.value
-      if (val !== undefined) onChangeRef.current(val)
+      if (val !== undefined && val !== optionsRef.current[indexRef.current]?.value) {
+        onChangeRef.current(val)
+      }
+      indexRef.current = logical
+      setPaintIndex(logical)
     }
 
-    function selectLogical(logical: number, behavior: ScrollBehavior = 'smooth') {
+    function settle() {
+      if (suppressScrollRef.current || touchActiveRef.current) return
       const n = optionsRef.current.length
       if (n <= 0) return
-      const next = loopingRef.current
-        ? mod(logical, n)
-        : clamp(logical, 0, n - 1)
-      emitLogical(next)
-      scrollToLogical(next, behavior)
+      const visual = visualFromScroll()
+      const logical = logicalFromVisual(visual)
+      commitLogical(logical)
+
+      if (loopingRef.current) {
+        const copy = Math.floor(visual / n)
+        if (copy <= 0 || copy >= LOOP_COPIES - 1) {
+          scrollToVisual(midBaseRef.current + logical, 'auto')
+        } else {
+          // Anlık snap — smooth mobilde momentum ile çakışır
+          scrollToVisual(visual, 'auto')
+        }
+      } else {
+        scrollToVisual(logical, 'auto')
+      }
+      interactingRef.current = false
+    }
+
+    function scheduleSettle(delay = 140) {
+      window.clearTimeout(settleTimer)
+      settleTimer = window.setTimeout(settle, delay)
     }
 
     function onScroll() {
       if (suppressScrollRef.current) return
+      interactingRef.current = true
       window.cancelAnimationFrame(frame)
       frame = window.requestAnimationFrame(() => {
         if (suppressScrollRef.current) return
-        emitLogical(logicalFromVisual(visualFromScroll()))
+        const logical = logicalFromVisual(visualFromScroll())
+        if (logical !== paintIndexRef.current) setPaintIndex(logical)
       })
-      window.clearTimeout(settleTimer)
-      settleTimer = window.setTimeout(() => {
-        if (suppressScrollRef.current) return
-        const visual = visualFromScroll()
-        const logical = logicalFromVisual(visual)
-        emitLogical(logical)
-        if (loopingRef.current) {
-          const n = optionsRef.current.length
-          const copy = Math.floor(visual / n)
-          if (copy <= 0 || copy >= LOOP_COPIES - 1) {
-            // Kenar kopyadaysa ortadaki banda sessizce dön
-            scrollToVisual(midBaseRef.current + logical, 'auto')
-          } else {
-            scrollToVisual(visual, 'smooth')
-          }
-        } else {
-          scrollToLogical(logical, 'smooth')
-        }
-      }, 80)
+      // Dokunma sürerken snap yok; bırakınca settle
+      if (!touchActiveRef.current) scheduleSettle(140)
     }
 
-    /** Fare tekerleği / trackpad: her adımda tek seçenek (döngülü) */
+    function onTouchStart() {
+      touchActiveRef.current = true
+      interactingRef.current = true
+      window.clearTimeout(settleTimer)
+    }
+
+    function onTouchEnd() {
+      touchActiveRef.current = false
+      // Momentum bitsin diye biraz bekle
+      scheduleSettle(160)
+    }
+
+    /** Fare tekerleği / trackpad: her adımda tek seçenek */
     function onWheel(e: WheelEvent) {
       e.preventDefault()
       e.stopPropagation()
@@ -258,29 +301,32 @@ export function WheelColumn({
 
       const n = optionsRef.current.length
       if (n <= 0) return
-      if (loopingRef.current) {
-        selectLogical(indexRef.current + dir, 'smooth')
-      } else {
-        selectLogical(
-          clamp(indexRef.current + dir, 0, n - 1),
-          'smooth',
-        )
-      }
+      const next = loopingRef.current
+        ? mod(indexRef.current + dir, n)
+        : clamp(indexRef.current + dir, 0, n - 1)
+      commitLogical(next)
+      scrollToVisual(expectedVisual(next), 'smooth')
     }
 
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true })
     return () => {
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
       window.cancelAnimationFrame(frame)
       window.clearTimeout(settleTimer)
       window.clearTimeout(wheelUnlockTimer)
       window.clearTimeout(suppressTimerRef.current)
     }
-  }, [scrollToLogical, scrollToVisual])
+  }, [expectedVisual, scrollToVisual])
 
-  const visualActive = looping ? midBase + index : index
+  const visualActive = looping ? midBase + paintIndex : paintIndex
 
   return (
     <div ref={rootRef} className="wheel-column">
@@ -297,26 +343,30 @@ export function WheelColumn({
           const scale = clamp(1 - dist * 0.12, 0.72, 1)
           const opacity = clamp(1 - dist * 0.28, 0.22, 1)
           const rotate = clamp(dist * 18, 0, 54)
+          const active = visual === visualActive
           return (
-            <button
+            <div
               key={`${opt.value}-${visual}`}
-              type="button"
-              className={`wheel-item${visual === visualActive ? ' is-active' : ''}`}
+              role="option"
+              aria-selected={active}
+              className={`wheel-item${active ? ' is-active' : ''}`}
               style={{
                 transform: `translateZ(0) scale(${scale}) rotateX(${visual < visualActive ? rotate : -rotate}deg)`,
                 opacity,
               }}
               onClick={() => {
+                if (touchActiveRef.current) return
+                const logical = looping
+                  ? mod(visual, options.length)
+                  : visual
                 onChange(opt.value)
-                if (looping) {
-                  scrollToVisual(midBase + mod(visual, options.length), 'smooth')
-                } else {
-                  scrollToVisual(visual, 'smooth')
-                }
+                indexRef.current = logical
+                setPaintIndex(logical)
+                scrollToVisual(expectedVisual(logical), 'smooth')
               }}
             >
               {opt.label}
-            </button>
+            </div>
           )
         })}
         <div style={{ height: pad * itemH }} aria-hidden />
@@ -345,8 +395,14 @@ export function WheelPickerShell({
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onCancel()
     }
+    // Arka plan kaymasını kilitle
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onCancel])
 
   if (!open) return null

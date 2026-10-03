@@ -1,4 +1,4 @@
-import { IconArea, PageTitle } from '../components/Icons'
+import { IconWallet, PageTitle } from '../components/Icons'
 import { FarmDebtsPanel } from '../features/debts/FarmDebtsPanel'
 import {
   FarmDepotPanel,
@@ -13,7 +13,7 @@ export function AssetsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <PageTitle icon={<IconArea />} tone="olive">
+          <PageTitle icon={<IconWallet />} tone="olive">
             Varlıklar
           </PageTitle>
           <p className="muted">Depo, satışlar ve borç takibi.</p>

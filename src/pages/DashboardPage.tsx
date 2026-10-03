@@ -4,6 +4,7 @@ import { CollapseSection } from '../components/CollapseSection'
 import {
   HeadingIcon,
   IconFields,
+  IconFurrows,
   IconPlus,
   IconTrash,
   IconTree,
@@ -289,7 +290,7 @@ export function DashboardPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <PageTitle icon={<IconFields />} tone="green">
+          <PageTitle icon={<IconFurrows />} tone="green">
             Tarlalar
           </PageTitle>
         </div>

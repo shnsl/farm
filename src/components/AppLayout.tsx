@@ -2,11 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useNavSwipe } from '../lib/useNavSwipe'
 import {
-  IconArea,
-  IconCompare,
-  IconFields,
+  IconChart,
+  IconFurrows,
   IconSearch,
   IconSettings,
+  IconWallet,
 } from './Icons'
 
 export function AppLayout() {
@@ -35,31 +35,32 @@ export function AppLayout() {
           </span>
           ORA
         </Link>
-        <nav className="nav">
-          <NavLink to="/" end>
-            <IconFields />
-            Tarlalar
+        <nav className="nav" aria-label="Ana menü">
+          <NavLink to="/" end aria-label="Tarlalar" title="Tarlalar">
+            <IconFurrows />
+            <span className="nav-label">Tarlalar</span>
           </NavLink>
-          <NavLink to="/assets">
-            <IconArea />
-            Varlıklar
+          <NavLink to="/assets" aria-label="Varlıklar" title="Varlıklar">
+            <IconWallet />
+            <span className="nav-label">Varlıklar</span>
           </NavLink>
-          <NavLink to="/stats">
-            <IconCompare />
-            İstatistikler
+          <NavLink to="/stats" aria-label="İstatistikler" title="İstatistikler">
+            <IconChart />
+            <span className="nav-label">İstatistikler</span>
           </NavLink>
-          <NavLink to="/search">
+          <NavLink to="/search" aria-label="Ara" title="Ara">
             <IconSearch />
-            Ara
+            <span className="nav-label">Ara</span>
           </NavLink>
-          <NavLink to="/settings">
+          <NavLink to="/settings" aria-label="Ayarlar" title="Ayarlar">
             <IconSettings />
-            Ayarlar
+            <span className="nav-label">Ayarlar</span>
           </NavLink>
         </nav>
         <form className="top-search" onSubmit={onSearch} role="search">
           <input
             type="search"
+            size={1}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ara…"

@@ -3,7 +3,7 @@ import { AnimatedNumber } from '../components/AnimatedNumber'
 import { CollapseSection } from '../components/CollapseSection'
 import {
   IconArea,
-  IconCompare,
+  IconChart,
   IconFields,
   IconFuel,
   IconTree,
@@ -157,7 +157,7 @@ export function StatsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <PageTitle icon={<IconCompare />} tone="sky">
+          <PageTitle icon={<IconChart />} tone="sky">
             İstatistikler
           </PageTitle>
           <p className="muted">

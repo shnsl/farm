@@ -213,11 +213,19 @@ input {
 
 .nav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.12rem;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
 }
 
 .nav a {
@@ -229,11 +237,16 @@ input {
   border-radius: 999px;
   border: 1px solid transparent;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .nav a svg {
   font-size: 1rem;
   flex-shrink: 0;
+}
+
+.nav-label {
+  line-height: 1;
 }
 
 .nav a:hover {
@@ -453,18 +466,24 @@ html[data-theme='dark'] .field-card.field-tone-dag {
 }
 
 .top-search {
-  flex: 1;
-  min-width: 140px;
+  flex: 1 1 0;
+  min-width: 0;
   max-width: 280px;
 }
 
 .top-search input {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.45rem 0.85rem;
   background: var(--input-bg);
   color: var(--ink);
+}
+
+.top-search input[type='search'] {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .search-page-form {
@@ -1985,13 +2004,58 @@ html[data-theme='dark'] .stats-spend-general {
 @media (max-width: 860px) {
   .topbar {
     flex-wrap: wrap;
+    gap: 0.55rem;
+    padding: 0.65rem 0.75rem;
+    padding-top: calc(0.65rem + env(safe-area-inset-top, 0px));
+  }
+
+  .brand {
+    font-size: 1.15rem;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+  }
+
+  .brand-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .nav {
+    order: 3;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 0.08rem;
+    min-width: 0;
+  }
+
+  .nav-label {
+    display: none;
+  }
+
+  .nav a {
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .nav a svg {
+    font-size: 1.15rem;
   }
 
   .top-search {
-    order: 3;
+    order: 2;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
     max-width: none;
+  }
+
+  .top-search input {
     width: 100%;
-    flex: 1 0 100%;
+    min-width: 0;
+    padding-inline: 0.55rem;
   }
 
   .search-page-form {
@@ -2878,10 +2942,14 @@ html[data-theme='dark'] .debt-type-other .debt-type-badge {
 .wheel-column-scroller {
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   scrollbar-width: none;
   transform-style: preserve-3d;
+  /* iOS’ta momentum kaydırmayı bozmasın */
+  will-change: scroll-position;
 }
 
 .wheel-column-scroller::-webkit-scrollbar {
@@ -2894,17 +2962,24 @@ html[data-theme='dark'] .debt-type-other .debt-type-badge {
   display: grid;
   place-items: center;
   border: 0;
+  margin: 0;
+  padding: 0;
   background: transparent;
-  color: var(--ink);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
   font: inherit;
   font-size: clamp(1.05rem, 3.8vw, 1.2rem);
   font-weight: 500;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
   transform-origin: center center;
-  transition: transform 0.08s linear, opacity 0.08s linear;
+  /* Geçiş mobilde kaydırmayı ağırlaştırır — sadece aktif için hafif */
+  transition: none;
 }
 
 .wheel-item.is-active {
+  color: var(--ink);
   font-weight: 700;
   font-size: clamp(1.15rem, 4.2vw, 1.32rem);
 }
@@ -2950,6 +3025,14 @@ html[data-theme='dark'] .wheel-item {
 
 html[data-theme='dark'] .wheel-item.is-active {
   color: #fff;
+}
+
+html[data-accent='black'][data-theme='dark'] .wheel-item {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+html[data-accent='black'][data-theme='dark'] .wheel-item.is-active {
+  color: #ffffff;
 }
 
 /* Siyah tema: kontrast ve okunabilirlik */

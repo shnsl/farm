@@ -17,7 +17,7 @@ function isSwipeBlocked(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
   return Boolean(
     target.closest(
-      'input, textarea, select, [contenteditable="true"], [data-no-swipe], .grid-wrap, .table-wrap, .field-map-viewport, .tree-grid',
+      'input, textarea, select, [contenteditable="true"], [data-no-swipe], .wheel-sheet, .wheel-column-scroller, .grid-wrap, .table-wrap, .field-map-viewport, .tree-grid',
     ),
   )
 }
