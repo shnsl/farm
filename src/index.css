@@ -2943,13 +2943,11 @@ html[data-theme='dark'] .debt-type-other .debt-type-badge {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+  touch-action: none;
   scrollbar-width: none;
   transform-style: preserve-3d;
-  /* iOS’ta momentum kaydırmayı bozmasın */
-  will-change: scroll-position;
 }
 
 .wheel-column-scroller::-webkit-scrollbar {
@@ -2972,7 +2970,7 @@ html[data-theme='dark'] .debt-type-other .debt-type-badge {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: pan-y;
+  touch-action: none;
   transform-origin: center center;
   /* Geçiş mobilde kaydırmayı ağırlaştırır — sadece aktif için hafif */
   transition: none;

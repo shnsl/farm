@@ -203,6 +203,7 @@ export function WheelColumn({
     let frame = 0
     let settleTimer = 0
     let idleRaf = 0
+    let correctRaf = 0
     let wheelAcc = 0
     let wheelLock = false
     let wheelUnlockTimer = 0
@@ -211,6 +212,13 @@ export function WheelColumn({
     let sampleScroll = el.scrollTop
     let sampleTime = 0
     let liveVelocity = 0
+    /** Dokunmayı elle yönet — native momentum arada bırakmasın */
+    let dragging = false
+    let dragStartY = 0
+    let dragStartScroll = 0
+    let lastTouchY = 0
+    let lastTouchT = 0
+    let velSamples: number[] = []
 
     function maxVisual() {
       const n = optionsRef.current.length
@@ -224,21 +232,25 @@ export function WheelColumn({
       return clamp(Math.round(el!.scrollTop / step), 0, maxVisual())
     }
 
-    /** Bırakış hızına göre hedef satır (hızlı fırlatmada yönü tercih eder) */
+    /** Bırakış hızına göre hedef satır */
     function targetVisualFromVelocity(velPxPerMs: number) {
       const step = itemHRef.current || DEFAULT_ITEM_H
       const raw = el!.scrollTop / step
       const abs = Math.abs(velPxPerMs)
-      // ~80–180ms coast tahmini; hızlıysa daha uzağa projekte et
-      const coastMs = abs > 0.8 ? 180 : abs > 0.35 ? 130 : 0
-      const projected = raw + (velPxPerMs * coastMs) / step
-      if (abs > 0.35) {
-        // Yönlü yuvarlama: arada kalmayı azalt
+      // Fırlatma mesafesi: hız * sönüm süresi
+      let coastItems = 0
+      if (abs > 0.15) {
+        coastItems = (velPxPerMs * (abs > 1.2 ? 220 : abs > 0.5 ? 160 : 100)) / step
+      }
+      const projected = raw + coastItems
+      if (abs > 0.2) {
         const biased =
-          velPxPerMs > 0 ? Math.ceil(projected - 0.15) : Math.floor(projected + 0.15)
+          velPxPerMs > 0
+            ? Math.round(projected + 0.2)
+            : Math.round(projected - 0.2)
         return clamp(biased, 0, maxVisual())
       }
-      return clamp(Math.round(projected), 0, maxVisual())
+      return clamp(Math.round(raw), 0, maxVisual())
     }
 
     function logicalFromVisual(visual: number) {
@@ -256,46 +268,68 @@ export function WheelColumn({
       setPaintIndex(logical)
     }
 
-    /** Native momentum’u kesip satıra kilitle */
+    function paintFromScroll() {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        if (suppressScrollRef.current && !dragging) return
+        const logical = logicalFromVisual(visualFromScroll())
+        if (logical !== paintIndexRef.current) setPaintIndex(logical)
+      })
+    }
+
+    /** Momentum’u öldürüp satıra kilitle; birkaç kare düzelt */
     function snapHard(visual: number) {
       const step = itemHRef.current || DEFAULT_ITEM_H
       const top = visual * step
       suppressScrollRef.current = true
       window.clearTimeout(suppressTimerRef.current)
-      const prevOverflow = el!.style.overflow
-      el!.style.overflow = 'hidden'
+      window.cancelAnimationFrame(correctRaf)
+
+      el!.style.overflowY = 'hidden'
       el!.scrollTop = top
-      // Bir frame sonra overflow geri — momentum ölür
-      window.requestAnimationFrame(() => {
-        el!.style.overflow = prevOverflow
+
+      let frames = 0
+      const maxFrames = 12
+      function correct() {
         el!.scrollTop = top
+        frames += 1
+        if (frames < maxFrames) {
+          correctRaf = window.requestAnimationFrame(correct)
+          return
+        }
+        el!.style.overflowY = ''
+        // Son güvenlik: hâlâ ofset varsa bir kez daha
+        if (Math.abs(el!.scrollTop - top) > 0.5) el!.scrollTop = top
         suppressTimerRef.current = window.setTimeout(() => {
-          if (Math.abs(el!.scrollTop - top) > 1) el!.scrollTop = top
+          if (Math.abs(el!.scrollTop - top) > 0.5) el!.scrollTop = top
           suppressScrollRef.current = false
-        }, 48)
-      })
+          interactingRef.current = false
+        }, 80)
+      }
+      correctRaf = window.requestAnimationFrame(correct)
+    }
+
+    function resolveVisual(visual: number) {
+      const n = optionsRef.current.length
+      if (n <= 0) return 0
+      if (!loopingRef.current) return visual
+      const logical = logicalFromVisual(visual)
+      const copy = Math.floor(visual / n)
+      if (copy <= 0 || copy >= LOOP_COPIES - 1) {
+        return midBaseRef.current + logical
+      }
+      return visual
     }
 
     function settle(vel = releaseVelocity) {
-      if (suppressScrollRef.current || touchActiveRef.current) return
+      if (touchActiveRef.current) return
       const n = optionsRef.current.length
       if (n <= 0) return
-      const visual = targetVisualFromVelocity(vel)
+      const visual = resolveVisual(targetVisualFromVelocity(vel))
       const logical = logicalFromVisual(visual)
       commitLogical(logical)
       releaseVelocity = 0
-
-      if (loopingRef.current) {
-        const copy = Math.floor(visual / n)
-        if (copy <= 0 || copy >= LOOP_COPIES - 1) {
-          snapHard(midBaseRef.current + logical)
-        } else {
-          snapHard(visual)
-        }
-      } else {
-        snapHard(logical)
-      }
-      interactingRef.current = false
+      snapHard(visual)
     }
 
     function cancelIdleWatch() {
@@ -303,94 +337,94 @@ export function WheelColumn({
       window.cancelAnimationFrame(idleRaf)
     }
 
-    /** Momentum bitene kadar bekle, sonra hız yönlü fokus */
+    /** Masaüstü trackpad / native scroll sonrası */
     function waitIdleThenSettle() {
+      if (dragging) return
       cancelIdleWatch()
       let lastTop = el!.scrollTop
       let stableFrames = 0
       const started = performance.now()
 
       function tick() {
-        if (touchActiveRef.current) return
+        if (touchActiveRef.current || dragging) return
         const now = performance.now()
         const top = el!.scrollTop
-        const dt = Math.max(1, now - sampleTime)
-        if (sampleTime > 0) {
-          liveVelocity = (top - sampleScroll) / dt
-        }
-        sampleScroll = top
-        sampleTime = now
-
-        if (Math.abs(top - lastTop) < 0.6) {
-          stableFrames += 1
-        } else {
+        if (Math.abs(top - lastTop) < 0.5) stableFrames += 1
+        else {
           stableFrames = 0
           lastTop = top
         }
-
-        // Duruldu veya uzun sürdü — odakla
-        if (stableFrames >= 3 || now - started > 420) {
-          settle(Math.abs(releaseVelocity) > 0.12 ? releaseVelocity : liveVelocity)
+        if (stableFrames >= 4 || now - started > 500) {
+          settle(0)
           return
         }
         idleRaf = window.requestAnimationFrame(tick)
       }
 
-      // Momentum’un başlaması için kısa gecikme
       settleTimer = window.setTimeout(() => {
         lastTop = el!.scrollTop
-        sampleScroll = lastTop
-        sampleTime = performance.now()
         idleRaf = window.requestAnimationFrame(tick)
-      }, 32)
+      }, 48)
     }
 
     function onScroll() {
-      if (suppressScrollRef.current) return
+      if (suppressScrollRef.current || dragging) return
       interactingRef.current = true
-      const now = performance.now()
-      if (sampleTime > 0) {
-        const dt = Math.max(1, now - sampleTime)
-        liveVelocity = (el!.scrollTop - sampleScroll) / dt
-      }
-      sampleScroll = el!.scrollTop
-      sampleTime = now
-
-      window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(() => {
-        if (suppressScrollRef.current) return
-        const logical = logicalFromVisual(visualFromScroll())
-        if (logical !== paintIndexRef.current) setPaintIndex(logical)
-      })
-      // Dokunma yoksa (momentum / trackpad): idle sonrası snap
+      paintFromScroll()
       if (!touchActiveRef.current) waitIdleThenSettle()
     }
 
-    function onTouchStart() {
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return
+      const t = e.touches[0]!
       touchActiveRef.current = true
       interactingRef.current = true
+      dragging = true
       cancelIdleWatch()
-      releaseVelocity = 0
+      window.cancelAnimationFrame(correctRaf)
+      window.clearTimeout(suppressTimerRef.current)
+      suppressScrollRef.current = false
+      el!.style.overflowY = 'hidden'
+
+      dragStartY = t.clientY
+      dragStartScroll = el!.scrollTop
+      lastTouchY = t.clientY
+      lastTouchT = performance.now()
       liveVelocity = 0
-      sampleScroll = el!.scrollTop
-      sampleTime = performance.now()
+      releaseVelocity = 0
+      velSamples = []
     }
 
-    function onTouchMove() {
+    function onTouchMove(e: TouchEvent) {
+      if (!dragging || e.touches.length !== 1) return
+      e.preventDefault()
+      const t = e.touches[0]!
       const now = performance.now()
-      const top = el!.scrollTop
-      if (sampleTime > 0) {
-        const dt = Math.max(1, now - sampleTime)
-        liveVelocity = (top - sampleScroll) / dt
-      }
-      sampleScroll = top
-      sampleTime = now
+      const y = t.clientY
+      const dt = Math.max(1, now - lastTouchT)
+      const instant = (lastTouchY - y) / dt
+      velSamples.push(instant)
+      if (velSamples.length > 5) velSamples.shift()
+      liveVelocity =
+        velSamples.reduce((a, b) => a + b, 0) / velSamples.length
+      lastTouchY = y
+      lastTouchT = now
+
+      const maxTop = maxVisual() * (itemHRef.current || DEFAULT_ITEM_H)
+      el!.scrollTop = clamp(dragStartScroll + (dragStartY - y), 0, maxTop)
+      paintFromScroll()
     }
 
     function onTouchEnd() {
+      if (!dragging) {
+        touchActiveRef.current = false
+        return
+      }
+      dragging = false
       releaseVelocity = liveVelocity
       touchActiveRef.current = false
-      waitIdleThenSettle()
+      // Native momentum yok — hemen hız yönlü fokus
+      settle(releaseVelocity)
     }
 
     /** Fare tekerleği / trackpad: her adımda tek seçenek */
@@ -422,7 +456,7 @@ export function WheelColumn({
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
     el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd, { passive: true })
     el.addEventListener('touchcancel', onTouchEnd, { passive: true })
     return () => {
@@ -434,9 +468,11 @@ export function WheelColumn({
       el.removeEventListener('touchcancel', onTouchEnd)
       window.cancelAnimationFrame(frame)
       window.cancelAnimationFrame(idleRaf)
+      window.cancelAnimationFrame(correctRaf)
       window.clearTimeout(settleTimer)
       window.clearTimeout(wheelUnlockTimer)
       window.clearTimeout(suppressTimerRef.current)
+      el.style.overflowY = ''
     }
   }, [expectedVisual, scrollToVisual])
 
