@@ -11,6 +11,8 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  type DocumentData,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { z } from 'zod'
@@ -48,9 +50,11 @@ function isHarvestDepotSpecies(species?: string | null): boolean {
   )
 }
 
-type StockDocSnap = Awaited<
-  ReturnType<typeof getDocs>
->['docs'][number]
+type StockDocSnap = QueryDocumentSnapshot<DocumentData>
+
+function stockData(data: DocumentData | undefined): Record<string, unknown> {
+  return (data ?? {}) as Record<string, unknown>
+}
 
 async function listStockDocsBySpeciesKey(
   farmId: string,
@@ -62,7 +66,8 @@ async function listStockDocsBySpeciesKey(
     collection(db, 'farms', farmId, 'warehouseStock'),
   )
   return snap.docs.filter(
-    (d) => normalizeSpeciesKey(String(d.data().species ?? '')) === key,
+    (d) =>
+      normalizeSpeciesKey(String(stockData(d.data()).species ?? '')) === key,
   )
 }
 
@@ -73,7 +78,7 @@ function pickDisplaySpecies(
   if (matches.length === 0) return fallback.trim()
   // Mevcut kayıt adını koru (kullanıcının ilk yazımı)
   const named = matches
-    .map((d) => String(d.data().species ?? '').trim())
+    .map((d) => String(stockData(d.data()).species ?? '').trim())
     .find((s) => s.length > 0)
   return named || fallback.trim()
 }
@@ -172,7 +177,7 @@ export function subscribeWarehouseStock(
     (snap) =>
       onData(
         snap.docs
-          .map((d) => mapStock(d.id, d.data()))
+          .map((d) => mapStock(d.id, stockData(d.data())))
           .filter((i) => i.kg > 0 || i.species),
       ),
     (err) => onError?.(err),
@@ -190,7 +195,8 @@ export function subscribeSales(
   )
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => mapSale(d.id, d.data()))),
+    (snap) =>
+      onData(snap.docs.map((d) => mapSale(d.id, stockData(d.data())))),
     (err) => onError?.(err),
   )
 }
@@ -211,7 +217,9 @@ export async function consolidateWarehouseStockCaseDuplicates(
   )
   const groups = new Map<string, StockDocSnap[]>()
   for (const d of snap.docs) {
-    const key = normalizeSpeciesKey(String(d.data().species ?? ''))
+    const key = normalizeSpeciesKey(
+      String(stockData(d.data()).species ?? ''),
+    )
     if (!key) continue
     const list = groups.get(key)
     if (list) list.push(d)
@@ -221,9 +229,10 @@ export async function consolidateWarehouseStockCaseDuplicates(
   const now = new Date().toISOString()
   for (const [, docs] of groups) {
     if (docs.length <= 1) continue
-    const preferredId = warehouseStockDocId(
-      String(docs[0]!.data().species ?? ''),
+    const firstSpecies = String(
+      stockData(docs[0]!.data()).species ?? '',
     )
+    const preferredId = warehouseStockDocId(firstSpecies)
     const preferredRef = doc(
       db,
       'farms',
@@ -231,7 +240,7 @@ export async function consolidateWarehouseStockCaseDuplicates(
       'warehouseStock',
       preferredId,
     )
-    const displayName = pickDisplaySpecies(docs, String(docs[0]!.data().species ?? ''))
+    const displayName = pickDisplaySpecies(docs, firstSpecies)
     let totalKg = 0
     let startedAt: string | undefined
     let notes = ''
@@ -239,9 +248,12 @@ export async function consolidateWarehouseStockCaseDuplicates(
     let createdBy: string | undefined
 
     for (const d of docs) {
-      const data = d.data()
+      const data = stockData(d.data())
       totalKg += Number(data.kg ?? 0)
-      startedAt = earlierDate(startedAt, data.startedAt ? String(data.startedAt) : null)
+      startedAt = earlierDate(
+        startedAt,
+        data.startedAt ? String(data.startedAt) : null,
+      )
       const n = data.notes ? String(data.notes) : ''
       if (n && !notes.includes(n)) {
         notes = [notes, n].filter(Boolean).join(' · ')
@@ -305,7 +317,7 @@ export async function adjustWarehouseStock(
     let mergedStarted: string | undefined
     for (const snap of extraSnaps) {
       if (!snap.exists()) continue
-      const data = snap.data() ?? {}
+      const data = stockData(snap.data())
       mergedKg += Number(data.kg ?? 0)
       mergedStarted = earlierDate(
         mergedStarted,
@@ -336,7 +348,7 @@ export async function adjustWarehouseStock(
       return
     }
 
-    const data = fresh.data() ?? {}
+    const data = stockData(fresh.data())
     const current = Number(data.kg ?? 0) + mergedKg
     const next = Number((current + deltaKg).toFixed(2))
     if (next < -0.001) {
@@ -602,7 +614,7 @@ export async function addManualWarehouseStock(
     let mergedNotes = ''
     for (const snap of extraSnaps) {
       if (!snap.exists()) continue
-      const data = snap.data() ?? {}
+      const data = stockData(snap.data())
       mergedKg += Number(data.kg ?? 0)
       mergedStarted = earlierDate(
         mergedStarted,
@@ -633,7 +645,7 @@ export async function addManualWarehouseStock(
       return
     }
 
-    const data = fresh.data() ?? {}
+    const data = stockData(fresh.data())
     const current = Number(data.kg ?? 0) + mergedKg
     const next = Number((current + addKg).toFixed(2))
     const startedAt =
